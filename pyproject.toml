@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "media-intelligence-engine"
+version = "0.1.0"
+description = "Media Intelligence Engine data and agent workspace."
+requires-python = ">=3.11"
+dependencies = [
+    "networkx>=3.0",
+    "polars>=0.20.31",
+    "pyarrow>=15.0.0",
+]
+
+[project.optional-dependencies]
+server = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "pydantic>=2.0",
+]
+accelerated = [
+    "hdbscan>=0.8.33",
+]
+nat = [
+    "nvidia-nat>=1.6.0",
+]
+test = [
+    "pytest>=8.0",
+]
+
+[tool.setuptools]
+packages = ["engine", "agent", "server"]
+
+[tool.setuptools.package-data]
+server = ["static/*.html"]

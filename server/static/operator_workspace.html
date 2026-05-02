@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Media Intelligence Engine</title>
+    <style>
+      :root {
+        --mie-bg: #f7f7f4;
+        --mie-panel: #ffffff;
+        --mie-text: #1e2528;
+        --mie-muted: #667074;
+        --mie-accent: #0f766e;
+        --mie-risk: #b42318;
+        --mie-line: #d9dedb;
+        --mie-soft: #edf2ef;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--mie-bg);
+        color: var(--mie-text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      .shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+      }
+
+      aside {
+        border-right: 1px solid var(--mie-line);
+        background: var(--mie-panel);
+        padding: 18px;
+      }
+
+      main {
+        padding: 18px;
+        display: grid;
+        gap: 14px;
+        grid-template-rows: auto auto minmax(360px, 1fr) auto;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 20px;
+        line-height: 1.2;
+      }
+
+      h2 {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0;
+        color: var(--mie-muted);
+      }
+
+      .muted {
+        color: var(--mie-muted);
+      }
+
+      .filters {
+        display: grid;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      label {
+        display: grid;
+        gap: 5px;
+        font-size: 12px;
+        color: var(--mie-muted);
+      }
+
+      select,
+      input,
+      button {
+        width: 100%;
+        min-height: 36px;
+        border: 1px solid var(--mie-line);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--mie-text);
+        font: inherit;
+      }
+
+      select,
+      input {
+        padding: 0 10px;
+      }
+
+      button {
+        cursor: pointer;
+        background: var(--mie-accent);
+        color: #fff;
+        border-color: var(--mie-accent);
+        font-weight: 700;
+      }
+
+      .topbar,
+      .kpis,
+      .panels,
+      .table-wrap {
+        display: grid;
+        gap: 12px;
+      }
+
+      .topbar {
+        grid-template-columns: minmax(0, 1fr) 260px;
+        align-items: center;
+      }
+
+      .status {
+        border: 1px solid var(--mie-line);
+        border-radius: 6px;
+        background: var(--mie-panel);
+        padding: 10px 12px;
+        font-size: 12px;
+        color: var(--mie-muted);
+      }
+
+      .kpis {
+        grid-template-columns: repeat(5, minmax(120px, 1fr));
+      }
+
+      .metric,
+      .panel,
+      .table-wrap {
+        border: 1px solid var(--mie-line);
+        border-radius: 6px;
+        background: var(--mie-panel);
+      }
+
+      .metric {
+        padding: 12px;
+        min-height: 74px;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 8px;
+        font-size: 22px;
+        line-height: 1;
+      }
+
+      .panels {
+        grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.7fr);
+      }
+
+      .panel {
+        min-height: 360px;
+        padding: 12px;
+      }
+
+      canvas {
+        width: 100%;
+        height: 318px;
+        display: block;
+      }
+
+      .bars {
+        display: grid;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .bar-row {
+        display: grid;
+        gap: 4px;
+      }
+
+      .bar-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 12px;
+      }
+
+      .bar-track {
+        height: 8px;
+        background: var(--mie-soft);
+        border-radius: 999px;
+        overflow: hidden;
+      }
+
+      .bar-fill {
+        height: 100%;
+        background: var(--mie-accent);
+      }
+
+      .table-wrap {
+        overflow: auto;
+        max-height: 320px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 880px;
+        font-size: 13px;
+      }
+
+      th,
+      td {
+        text-align: left;
+        border-bottom: 1px solid var(--mie-line);
+        padding: 10px 12px;
+        white-space: nowrap;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        background: var(--mie-panel);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0;
+        color: var(--mie-muted);
+      }
+
+      .risk-high,
+      .risk-elevated {
+        color: var(--mie-risk);
+        font-weight: 700;
+      }
+
+      @media (max-width: 920px) {
+        .shell,
+        .topbar,
+        .panels {
+          grid-template-columns: 1fr;
+        }
+
+        .kpis {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside>
+        <h1 id="brand">Media Intelligence Engine</h1>
+        <p class="muted" id="mode">Standard Edge Node</p>
+        <div class="filters">
+          <label>
+            Genre
+            <select id="genre"></select>
+          </label>
+          <label>
+            Platform
+            <select id="platform"></select>
+          </label>
+          <label>
+            Audience
+            <select id="demo"></select>
+          </label>
+          <label>
+            Risk
+            <select id="risk_category"></select>
+          </label>
+          <label>
+            Budget Tier
+            <select id="budget_tier"></select>
+          </label>
+          <label>
+            Emergent Trend
+            <select id="emergent_trend"></select>
+          </label>
+          <label>
+            Minimum viability
+            <input id="min_viability" type="number" min="0" max="1" step="0.05" value="0.75" />
+          </label>
+          <button id="apply">Apply</button>
+        </div>
+      </aside>
+      <main>
+        <div class="topbar">
+          <div>
+            <h2>Operator Workspace</h2>
+            <p class="muted" id="summary">Loading portfolio stream...</p>
+          </div>
+          <div class="status" id="benchmark">Latency ms: -- | Throughput: --</div>
+        </div>
+
+        <section class="kpis" id="kpis"></section>
+
+        <section class="panels">
+          <div class="panel">
+            <h2>Viability x Risk</h2>
+            <canvas id="scatter" width="960" height="420"></canvas>
+          </div>
+          <div class="panel">
+            <h2>Graph Edges</h2>
+            <div class="bars" id="edgeBars"></div>
+          </div>
+        </section>
+
+        <section class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Genre</th>
+                <th>Platform</th>
+                <th>Audience</th>
+                <th>Market</th>
+                <th>Budget</th>
+                <th>Trend</th>
+                <th>Viability</th>
+                <th>Completion</th>
+                <th>Risk</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const els = {
+        brand: document.getElementById("brand"),
+        mode: document.getElementById("mode"),
+        summary: document.getElementById("summary"),
+        benchmark: document.getElementById("benchmark"),
+        kpis: document.getElementById("kpis"),
+        scatter: document.getElementById("scatter"),
+        edgeBars: document.getElementById("edgeBars"),
+        rows: document.getElementById("rows"),
+        apply: document.getElementById("apply"),
+      };
+
+      const controls = ["genre", "platform", "demo", "risk_category", "budget_tier", "emergent_trend", "min_viability"].reduce((memo, id) => {
+        memo[id] = document.getElementById(id);
+        return memo;
+      }, {});
+
+      function formatNumber(value) {
+        if (value === null || value === undefined) return "--";
+        return Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 });
+      }
+
+      function setOptions(select, values) {
+        const current = select.value;
+        select.innerHTML = `<option value="">All</option>${values
+          .map((value) => `<option value="${value}">${value}</option>`)
+          .join("")}`;
+        select.value = values.includes(current) ? current : "";
+      }
+
+      function activeFilters() {
+        const filters = {};
+        for (const key of ["genre", "platform", "demo", "risk_category", "budget_tier", "emergent_trend"]) {
+          if (controls[key].value) filters[key] = controls[key].value;
+        }
+        if (controls.min_viability.value) filters.min_viability = Number(controls.min_viability.value);
+        return filters;
+      }
+
+      async function loadWorkspace() {
+        const response = await fetch("/interactive-workspace", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filters: activeFilters(),
+            limit: 300,
+            white_label: { brand_name: els.brand.textContent, theme: {} },
+          }),
+        });
+        const payload = await response.json();
+        render(payload);
+      }
+
+      function render(payload) {
+        const result = payload.result;
+        const theme = result.theme;
+        Object.entries(theme).forEach(([key, value]) => document.documentElement.style.setProperty(key, value));
+        els.brand.textContent = payload.white_label.brand_name;
+
+        const workspace = result.streams.workspace;
+        const graph = result.streams.graph;
+        const portfolio = result.streams.portfolio;
+        const options = workspace.filter_options;
+
+        setOptions(controls.genre, options.genres);
+        setOptions(controls.platform, options.platforms);
+        setOptions(controls.demo, options.demos);
+        setOptions(controls.risk_category, options.risk_categories);
+        setOptions(controls.budget_tier, options.budget_tiers);
+        setOptions(controls.emergent_trend, options.emergent_trends);
+
+        els.mode.textContent = workspace.benchmark.compute_source;
+        els.summary.textContent = `${formatNumber(portfolio.summary.records)} records | ${formatNumber(
+          graph.summary.edges
+        )} graph edges`;
+        els.benchmark.textContent = `Latency ms: ${formatNumber(
+          workspace.benchmark.latency_ms
+        )} | Throughput: ${formatNumber(workspace.benchmark.throughput)}`;
+        renderKpis(workspace.kpis);
+        renderScatter(workspace.scatter_points);
+        renderBars(graph.edge_counts);
+        renderRows(workspace.table_rows);
+      }
+
+      function renderKpis(kpis) {
+        const metrics = [
+          ["Records", kpis.records],
+          ["Avg viability", kpis.avg_viability],
+          ["Avg completion", kpis.avg_completion_prediction],
+          ["Avg risk", kpis.avg_cultural_risk],
+          ["High viability", kpis.high_viability_records],
+        ];
+        els.kpis.innerHTML = metrics
+          .map(([label, value]) => `<div class="metric"><span class="muted">${label}</span><strong>${formatNumber(value)}</strong></div>`)
+          .join("");
+      }
+
+      function renderScatter(points) {
+        const canvas = els.scatter;
+        const ctx = canvas.getContext("2d");
+        const width = canvas.width;
+        const height = canvas.height;
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--mie-soft");
+        ctx.fillRect(48, 24, width - 72, height - 72);
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--mie-line");
+        ctx.strokeRect(48, 24, width - 72, height - 72);
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--mie-muted");
+        ctx.font = "12px system-ui";
+        ctx.fillText("Risk", 14, 34);
+        ctx.fillText("Viability", width - 112, height - 20);
+        const trendColors = new Map();
+        const palette = ["#0f766e", "#2563eb", "#9333ea", "#c2410c", "#047857", "#be123c"];
+        for (const point of points) {
+          if (!trendColors.has(point.emergent_trend)) {
+            trendColors.set(point.emergent_trend, palette[trendColors.size % palette.length]);
+          }
+          const x = 48 + point.viability_score * (width - 72);
+          const y = height - 48 - point.cultural_risk_score * (height - 72);
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.fillStyle = trendColors.get(point.emergent_trend);
+          ctx.globalAlpha = 0.72;
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      function renderBars(edgeCounts) {
+        const top = edgeCounts.slice(0, 8);
+        const max = Math.max(...top.map((row) => row.edges), 1);
+        els.edgeBars.innerHTML = top
+          .map(
+            (row) => `<div class="bar-row">
+              <div class="bar-head"><span>${row.edge_type}</span><strong>${formatNumber(row.edges)}</strong></div>
+              <div class="bar-track"><div class="bar-fill" style="width:${(row.edges / max) * 100}%"></div></div>
+            </div>`
+          )
+          .join("");
+      }
+
+      function renderRows(rows) {
+        els.rows.innerHTML = rows
+          .map(
+            (row) => `<tr>
+              <td>${row.title}</td>
+              <td>${row.genre_primary}</td>
+              <td>${row.platform_fit}</td>
+              <td>${row.target_demo}</td>
+              <td>${row.market}</td>
+              <td>${row.budget_tier}</td>
+              <td>${row.emergent_trend}</td>
+              <td>${formatNumber(row.viability_score)}</td>
+              <td>${formatNumber(row.completion_prediction)}</td>
+              <td class="risk-${String(row.risk_category).toLowerCase()}">${row.risk_category}</td>
+            </tr>`
+          )
+          .join("");
+      }
+
+      els.apply.addEventListener("click", loadWorkspace);
+      loadWorkspace();
+    </script>
+  </body>
+</html>

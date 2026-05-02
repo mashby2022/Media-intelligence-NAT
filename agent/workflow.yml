@@ -1,0 +1,10 @@
+name: media_intelligence_liaison_core
+description: Persona-agnostic evidence workflow for the Media Intelligence Engine.
+tools:
+  - get_portfolio_evidence
+  - get_graph_evidence
+  - analyze_cultural_signal_network
+  - get_market_signal_evidence
+synthesis:
+  module: agent.tools
+  function: synthesize_evidence

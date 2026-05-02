@@ -1,0 +1,19 @@
+{
+  "project": "Media Intelligence Engine",
+  "phase": "1a",
+  "created_at": "2026-04-30T01:18:59.488365+00:00",
+  "rows": 150000,
+  "seed": 42,
+  "effective_mode": "OFFLINE",
+  "dataframe_engine": "polars",
+  "pandas_used": false,
+  "spotify_signals": 5000,
+  "audience_behavior_substitute": "Runway Agent Engagement Logs",
+  "audience_profiles": 144,
+  "outputs": {
+    "scripts": "data/scripts_150k.parquet",
+    "spotify_signals": "data/spotify_daily_top200_signals.parquet",
+    "audience_profiles": "data/audience_behavior_profiles.parquet",
+    "source_registry": "data/source_registry.parquet"
+  }
+}

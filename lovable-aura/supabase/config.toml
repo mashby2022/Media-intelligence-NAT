@@ -1,0 +1,4 @@
+project_id = "ncxcgvfnganftbdycoli"
+
+[functions.miranda-chat]
+verify_jwt = false

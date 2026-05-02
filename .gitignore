@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.env
+.DS_Store
+
+lovable-aura/node_modules/
+lovable-aura/dist/
+
+data/raw/
+!data/raw/manual/
+!data/raw/manual/*.csv
+
+*.log

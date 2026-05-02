@@ -1,0 +1,201 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Aura Intelligence — Ethereal high-fashion design system. All colors HSL. */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+
+@layer base {
+  :root {
+    /* Ethereal palette */
+    --background: 252 100% 98%;          /* #F5F3FF lavender mist */
+    --foreground: 257 44% 20%;           /* deep amethyst-obsidian */
+
+    --card: 0 0% 100%;
+    --card-foreground: 257 44% 20%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 257 44% 20%;
+
+    --primary: 262 83% 58%;              /* #7C3AED rich amethyst */
+    --primary-foreground: 252 100% 98%;
+
+    --secondary: 250 67% 95%;            /* soft lavender */
+    --secondary-foreground: 263 44% 30%;
+
+    --muted: 250 50% 96%;
+    --muted-foreground: 257 18% 50%;
+
+    --accent: 199 95% 94%;               /* #E0F2FE pale sky */
+    --accent-foreground: 263 44% 30%;
+
+    --destructive: 350 70% 60%;
+    --destructive-foreground: 252 100% 98%;
+
+    --border: 252 60% 92%;
+    --input: 252 60% 92%;
+    --ring: 262 83% 58%;
+
+    --radius: 0.75rem;
+
+    /* Bespoke ethereal tokens */
+    --lavender: 252 100% 98%;
+    --lavender-deep: 250 67% 90%;
+    --periwinkle: 213 94% 68%;           /* #60A5FA cool periwinkle */
+    --periwinkle-soft: 213 94% 86%;
+    --amethyst: 262 83% 58%;             /* #7C3AED */
+    --amethyst-soft: 262 83% 76%;
+    --sky: 199 95% 94%;
+    --sky-deep: 205 80% 80%;
+    --obsidian: 257 44% 14%;
+    --silver: 240 15% 88%;
+
+    /* Iridescent gradients */
+    --gradient-iridescent: linear-gradient(135deg, hsl(252 100% 96%), hsl(213 94% 94%) 35%, hsl(262 83% 92%) 70%, hsl(213 94% 88%));
+    --gradient-amethyst: linear-gradient(135deg, hsl(262 83% 76%), hsl(262 83% 50%));
+    --gradient-pulse: radial-gradient(circle at 30% 30%, hsl(213 94% 88%), hsl(262 83% 80%) 50%, hsl(199 95% 92%));
+    --gradient-silver: linear-gradient(135deg, hsl(240 30% 96%), hsl(252 50% 90%) 50%, hsl(199 60% 92%));
+    --border-iridescent: linear-gradient(135deg, hsl(252 80% 88% / 0.8), hsl(199 80% 88% / 0.6), hsl(280 70% 88% / 0.8));
+
+    --shadow-ethereal: 0 1px 0 hsl(252 60% 92% / 0.6), 0 30px 80px -30px hsl(263 44% 42% / 0.18);
+    --shadow-halo: 0 0 0 1px hsl(263 60% 80% / 0.5), 0 0 28px hsl(263 60% 75% / 0.45);
+    --shadow-soft: 0 1px 2px hsl(257 44% 20% / 0.04), 0 12px 32px -12px hsl(263 44% 42% / 0.12);
+    --shadow-glass: 0 8px 32px -8px hsl(263 44% 42% / 0.12);
+
+    --sidebar-background: 252 100% 98%;
+    --sidebar-foreground: 257 30% 30%;
+    --sidebar-primary: 263 44% 42%;
+    --sidebar-primary-foreground: 252 100% 98%;
+    --sidebar-accent: 250 67% 95%;
+    --sidebar-accent-foreground: 263 44% 30%;
+    --sidebar-border: 252 60% 92%;
+    --sidebar-ring: 263 44% 60%;
+  }
+
+  .dark {
+    --background: 257 44% 8%;
+    --foreground: 252 100% 96%;
+    --card: 257 35% 12%;
+    --card-foreground: 252 100% 96%;
+    --popover: 257 35% 12%;
+    --popover-foreground: 252 100% 96%;
+    --primary: 263 60% 75%;
+    --primary-foreground: 257 44% 14%;
+    --secondary: 257 30% 18%;
+    --secondary-foreground: 252 100% 96%;
+    --muted: 257 25% 16%;
+    --muted-foreground: 252 30% 70%;
+    --accent: 199 40% 22%;
+    --accent-foreground: 252 100% 96%;
+    --destructive: 350 60% 55%;
+    --destructive-foreground: 252 100% 96%;
+    --border: 257 30% 22%;
+    --input: 257 30% 22%;
+    --ring: 263 60% 70%;
+    --sidebar-background: 257 44% 10%;
+    --sidebar-foreground: 252 100% 96%;
+    --sidebar-primary: 263 60% 75%;
+    --sidebar-primary-foreground: 257 44% 14%;
+    --sidebar-accent: 257 30% 18%;
+    --sidebar-accent-foreground: 252 100% 96%;
+    --sidebar-border: 257 30% 22%;
+    --sidebar-ring: 263 60% 70%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+    background-image:
+      radial-gradient(1200px 600px at 10% -10%, hsl(199 95% 94% / 0.6), transparent 60%),
+      radial-gradient(900px 500px at 110% 10%, hsl(263 60% 90% / 0.55), transparent 60%),
+      radial-gradient(800px 700px at 50% 110%, hsl(252 80% 92% / 0.5), transparent 60%);
+    background-attachment: fixed;
+  }
+
+  h1, h2, h3, .font-serif {
+    font-family: 'Playfair Display', Georgia, serif;
+    letter-spacing: -0.015em;
+    font-weight: 500;
+  }
+
+  .font-mono-data, .font-data {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-feature-settings: 'tnum';
+    letter-spacing: 0.01em;
+  }
+}
+
+@layer utilities {
+  .text-amethyst { color: hsl(var(--amethyst)); }
+  .text-periwinkle { color: hsl(var(--periwinkle)); }
+  .bg-periwinkle { background-color: hsl(var(--periwinkle)); }
+  .text-obsidian { color: hsl(var(--obsidian)); }
+  .bg-lavender { background-color: hsl(var(--lavender)); }
+  .bg-sky-pale { background-color: hsl(var(--sky)); }
+  .bg-amethyst { background-color: hsl(var(--amethyst)); }
+  .bg-gradient-iridescent { background-image: var(--gradient-iridescent); }
+  .bg-gradient-amethyst { background-image: var(--gradient-amethyst); }
+  .bg-gradient-silver { background-image: var(--gradient-silver); }
+  .bg-gradient-pulse { background-image: var(--gradient-pulse); }
+  .shadow-ethereal { box-shadow: var(--shadow-ethereal); }
+  .shadow-halo { box-shadow: var(--shadow-halo); }
+  .shadow-soft { box-shadow: var(--shadow-soft); }
+  .shadow-glass { box-shadow: var(--shadow-glass); }
+  .tracking-couture { letter-spacing: 0.32em; }
+
+  /* Iridescent thin border using gradient mask */
+  .border-iridescent {
+    position: relative;
+    background-clip: padding-box;
+    border: 1px solid transparent;
+  }
+  .border-iridescent::before {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--border-iridescent);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .glass {
+    background: hsl(0 0% 100% / 0.65);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+  }
+
+  .halo-pulse { animation: halo 3s ease-in-out infinite; }
+  @keyframes halo {
+    0%, 100% { box-shadow: 0 0 0 0 hsl(var(--amethyst) / 0.35), 0 0 18px hsl(var(--amethyst) / 0.30); }
+    50%      { box-shadow: 0 0 0 8px hsl(var(--amethyst) / 0), 0 0 32px hsl(var(--amethyst) / 0.55); }
+  }
+
+  .iridescent-shimmer {
+    background: linear-gradient(110deg, transparent 30%, hsl(263 60% 90% / 0.6) 45%, hsl(199 80% 92% / 0.6) 55%, transparent 70%);
+    background-size: 220% 100%;
+    animation: shimmer 4s linear infinite;
+  }
+  @keyframes shimmer {
+    0%   { background-position: 220% 0; }
+    100% { background-position: -220% 0; }
+  }
+
+  .fade-up { animation: fade-up 0.7s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .float-soft { animation: float-soft 6s ease-in-out infinite; }
+  @keyframes float-soft {
+    0%, 100% { transform: translateY(0px); }
+    50%      { transform: translateY(-6px); }
+  }
+}
