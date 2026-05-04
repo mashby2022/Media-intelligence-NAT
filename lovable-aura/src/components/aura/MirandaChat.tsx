@@ -15,7 +15,7 @@ const SUGGESTIONS = [
 const GREETING: Msg = {
   role: "assistant",
   content:
-    "**Miranda here.**\n\nHand me a treatment, a logline, or a half-formed idea — I'll return an Aura Brief, distilled across eleven million signals. Or simply ask.",
+    "**Miranda here.**\n\nHand me a treatment, a logline, or a half-formed idea — I'll return an Aura Brief grounded in auditable portfolio evidence. Or simply ask.",
   ts: Date.now(),
 };
 
@@ -71,7 +71,7 @@ export const MirandaChat = () => {
               Miranda<span className="italic text-amethyst">.</span>
             </div>
             <div className="text-[9px] tracking-couture uppercase text-muted-foreground">
-              Executive agent · NeMo-3-Nano · online
+              Executive agent · NAT + Nemotron Nano · online
             </div>
           </div>
         </div>

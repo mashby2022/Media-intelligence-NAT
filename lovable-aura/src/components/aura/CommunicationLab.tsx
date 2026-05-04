@@ -4,6 +4,7 @@ import {
   Presentation, ScrollText, Save,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { mieClient } from "@/lib/mieClient";
 import { exportAuraBrief, downloadBytes } from "@/lib/auraPdf";
@@ -43,13 +44,17 @@ const merge = (src: string, vars: Record<string, string>) =>
   src.replace(/{{\s*(\w+)\s*}}/g, (_, k) => vars[k] ?? `{{${k}}}`);
 
 export const CommunicationLab = () => {
-  const [tpl, setTpl] = useState(DEFAULT_TEMPLATE);
+  const [tpl, setTpl] = useState(() =>
+    typeof window === "undefined" ? DEFAULT_TEMPLATE : window.localStorage.getItem("aura.dispatch.template") || DEFAULT_TEMPLATE
+  );
   const [format, setFormat] = useState<Format>("slides");
   const [exporting, setExporting] = useState(false);
   const [dispatched, setDispatched] = useState(false);
+  const [autoVerify, setAutoVerify] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState("client@example.com");
   const [dispatchSubject, setDispatchSubject] = useState("Aura Brief — 2027 Strategy");
   const [dispatchHtml, setDispatchHtml] = useState<string | null>(null);
+  const [artifacts, setArtifacts] = useState<Array<{ format?: string; filename?: string; status?: string }>>([]);
   const [dispatchBullets, setDispatchBullets] = useState<string[]>([
     SAMPLE.bullet_one,
     SAMPLE.bullet_two,
@@ -69,33 +74,53 @@ export const CommunicationLab = () => {
   }, [tpl, dispatchHtml, dispatchBullets]);
   const activeFormat = FORMATS.find((f) => f.id === format)!;
 
-  const dispatch = async () => {
+  const saveTemplate = () => {
+    window.localStorage.setItem("aura.dispatch.template", tpl);
+    toast({
+      title: "Template saved",
+      description: "Communication Lab will reuse this template for future dispatches.",
+    });
+  };
+
+  const dispatch = async (autonomous = false) => {
     if (exporting) return;
     setExporting(true);
     try {
-      const dispatchResult = await mieClient.dispatchExecutiveBrief([recipientEmail], 5);
+      const outputFormat = format === "memo" ? "pdf" : "slides";
+      const dispatchResult = await mieClient.dispatchExecutiveBrief([recipientEmail], 5, {
+        template: tpl,
+        outputFormats: ["html", outputFormat],
+        autoVerify: autonomous,
+      });
       const payload = dispatchResult.result;
       setDispatchSubject(payload.subject);
       setDispatchHtml(payload.html_body);
       setDispatchBullets(payload.bullets || []);
+      setArtifacts(payload.generated_artifacts || []);
 
-      const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-      const { filename, bytes } = await exportAuraBrief(format, {
-        date: today,
-        edition: "Vol. 12 · Edition N°042",
-        tagline: SAMPLE.tagline,
-        verdict: SAMPLE.verdict as "Greenlight" | "Develop" | "Reconsider",
-        alignmentIndex: Number(SAMPLE.index),
-        bullets: [SAMPLE.bullet_one, SAMPLE.bullet_two, SAMPLE.bullet_three],
-        recipient: SAMPLE.recipient,
-        intake: "Resort 2027 — dawn light, soft armour, quiet rebellion.",
-      });
-      downloadBytes(filename, bytes);
+      let filename = payload.generated_artifacts?.find((artifact) => artifact.format === outputFormat)?.filename || activeFormat.meta;
+      if (!autonomous) {
+        const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+        const exported = await exportAuraBrief(format, {
+          date: today,
+          edition: "Vol. 12 · Edition N°042",
+          tagline: SAMPLE.tagline,
+          verdict: SAMPLE.verdict as "Greenlight" | "Develop" | "Reconsider",
+          alignmentIndex: Number(SAMPLE.index),
+          bullets: payload.bullets?.length === 3 ? payload.bullets : [SAMPLE.bullet_one, SAMPLE.bullet_two, SAMPLE.bullet_three],
+          recipient: SAMPLE.recipient,
+          intake: "Resort 2027 — dawn light, soft armour, quiet rebellion.",
+        });
+        filename = exported.filename;
+        downloadBytes(exported.filename, exported.bytes);
+      }
       setDispatched(true);
       setTimeout(() => setDispatched(false), 2400);
       toast({
-        title: "Aura Brief dispatched",
-        description: `${payload.subject} · ${activeFormat.label} downloaded as ${filename}.`,
+        title: autonomous ? "Dispatch sent" : "Aura Brief dispatched",
+        description: autonomous
+          ? `${payload.subject} · Auto-Verify completed.`
+          : `${payload.subject} · ${activeFormat.label} downloaded as ${filename}.`,
       });
     } catch (err) {
       console.error(err);
@@ -145,7 +170,10 @@ export const CommunicationLab = () => {
                 Markdown or HTML · merge tags <span className="text-amethyst">{"{{double_braces}}"}</span>
               </p>
             </div>
-            <button className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-obsidian text-white text-[10px] tracking-couture uppercase hover:bg-amethyst transition-colors">
+            <button
+              onClick={saveTemplate}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-obsidian text-white text-[10px] tracking-couture uppercase hover:bg-amethyst transition-colors"
+            >
               <Save className="h-3 w-3" /> Save
             </button>
           </div>
@@ -209,9 +237,9 @@ export const CommunicationLab = () => {
 
           <div className="px-6 py-3 border-t border-border/60 flex items-center justify-between bg-white/60 text-[10px] tracking-couture uppercase text-muted-foreground">
             <span className="inline-flex items-center gap-1 font-mono normal-case tracking-normal">
-              <Paperclip className="h-3 w-3" /> {activeFormat.meta}
+              <Paperclip className="h-3 w-3" /> {artifacts[0]?.filename || activeFormat.meta}
             </span>
-            <span className="text-amethyst">draft ready</span>
+            <span className="text-amethyst">{autoVerify ? "auto-verify armed" : "draft ready"}</span>
           </div>
         </article>
       </div>
@@ -233,6 +261,17 @@ export const CommunicationLab = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full border border-border/60 bg-white/70">
+              <Switch
+                checked={autoVerify}
+                onCheckedChange={(checked) => {
+                  setAutoVerify(checked);
+                  if (checked) void dispatch(true);
+                }}
+                className="data-[state=checked]:bg-amethyst"
+              />
+              <span className="text-[10px] tracking-couture uppercase text-obsidian">Auto-Verify</span>
+            </div>
             <input
               value={recipientEmail}
               onChange={(e) => setRecipientEmail(e.target.value)}
@@ -258,14 +297,14 @@ export const CommunicationLab = () => {
             </div>
 
             <button
-              onClick={dispatch}
+              onClick={() => void dispatch(false)}
               disabled={exporting}
               className="group inline-flex items-center justify-center gap-3 px-7 py-3.5 rounded-full bg-gradient-amethyst text-white text-[10px] tracking-couture uppercase shadow-halo hover:scale-[1.02] active:scale-100 transition-transform disabled:opacity-80 disabled:cursor-progress"
             >
               {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 : dispatched ? <Download className="h-3.5 w-3.5" />
                 : <Send className="h-3.5 w-3.5" />}
-              {exporting ? "Composing PDF…" : dispatched ? "Dispatched ✦  ·  Download again" : "Dispatch to Client Inbox"}
+              {exporting ? "Composing dispatch..." : dispatched ? "Dispatched" : "Dispatch to Client Inbox"}
               <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
             </button>
           </div>

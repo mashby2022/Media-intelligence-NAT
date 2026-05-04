@@ -1,49 +1,38 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Filter, Search, Sparkles, Sliders, Mail, FileCode2, Eye,
-  BookMarked, FolderOpen, Boxes, Music2, Headphones, Layers,
-  RefreshCw,
+  BookMarked, FolderOpen, Boxes, Layers, RefreshCw, Activity,
+  Cpu, Network, Database,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { mieClient, type MarketSignal, type NetworkResult, type WorkspaceResult, type WorkspaceRow } from "@/lib/mieClient";
+import {
+  mieClient,
+  type AssetStatus,
+  type HealthResult,
+  type KnowledgeItem,
+  type KnowledgeVerdict,
+  type MapCluster,
+  type MarketSignal,
+  type NetworkResult,
+  type PortfolioAsset,
+  type WorkspaceResult,
+  type WorkspaceRow,
+} from "@/lib/mieClient";
 
 /* ============================================================
  * Operator Studio — high-density companion to the Forecast view
  * ==========================================================*/
 
-type Atom = {
-  id: string;
-  atom: string;
-  collective: string;
-  velocity: number;
-  resonance: number;
-  reach: string;
-  spotify: number[];
-  podcast: number[];
-  status: "rising" | "peaking" | "fading";
-};
-
-const ATOMS: Atom[] = [
-  { id: "NA-0142", atom: "soft armour",          collective: "The Etherealists",     velocity: 4.21, resonance: 0.62, reach: "2.3M",
-    spotify: [3,4,5,6,8,7,11,14,12,16,19,22], podcast: [4,5,5,7,8,9,10,12,11,13,15,17], status: "rising" },
-  { id: "NA-0143", atom: "kitchen-sink romance", collective: "Grounded Visionaries", velocity: 3.84, resonance: 0.48, reach: "1.8M",
-    spotify: [6,5,7,8,7,9,10,11,13,12,14,15], podcast: [5,6,6,7,8,8,9,10,11,12,12,13], status: "rising" },
-  { id: "NA-0144", atom: "archive ferment",      collective: "Quiet Luminaries",     velocity: 3.12, resonance: 0.41, reach: "4.1M",
-    spotify: [8,9,9,10,11,10,12,13,12,14,13,15], podcast: [6,7,7,8,9,8,10,11,10,12,11,13], status: "peaking" },
-  { id: "NA-0145", atom: "lichen palette",       collective: "Studio Ceramicists",   velocity: 2.74, resonance: 0.55, reach: "920K",
-    spotify: [2,3,3,4,5,5,6,7,8,9,10,11], podcast: [3,3,4,4,5,6,6,7,8,8,9,10], status: "rising" },
-  { id: "NA-0146", atom: "performative wellness", collective: "Coastal Grandmothers", velocity: 1.21, resonance: -0.31, reach: "3.4M",
-    spotify: [12,11,10,9,8,8,7,6,6,5,4,4], podcast: [10,10,9,8,8,7,7,6,5,5,4,3], status: "fading" },
-  { id: "NA-0147", atom: "cinematic wardrobe",   collective: "The Etherealists",     velocity: 4.92, resonance: 0.71, reach: "5.6M",
-    spotify: [4,6,7,9,11,13,14,15,17,18,20,22], podcast: [5,6,7,8,10,11,12,13,14,15,16,18], status: "rising" },
-  { id: "NA-0148", atom: "slowcore revival",     collective: "Atlantic Brutalists",  velocity: 3.41, resonance: 0.52, reach: "1.1M",
-    spotify: [5,5,6,7,8,9,9,10,12,12,13,14], podcast: [4,4,5,6,7,7,8,9,10,11,12,12], status: "peaking" },
+type StatusFilter = "all" | AssetStatus;
+const STATUS_FILTERS: Array<{ label: string; value: StatusFilter }> = [
+  { label: "All Assets", value: "all" },
+  { label: "Rising", value: "rising" },
+  { label: "Peaking", value: "peaking" },
+  { label: "Fading", value: "fading" },
 ];
-
-const FILTERS = ["All Atoms", "Rising", "Peaking", "Fading"];
 const TABS = [
-  { id: "anatomy",      label: "Atomic Anatomy",         Icon: Layers },
+  { id: "anatomy",      label: "Portfolio Logic",        Icon: Layers },
   { id: "knowledge",    label: "Living Knowledge Base",  Icon: BookMarked },
   { id: "orchestration",label: "Orchestration Lab",      Icon: Sliders },
   { id: "template",     label: "Template Architect",     Icon: FileCode2 },
@@ -58,28 +47,48 @@ const formatCompact = (value: number | undefined) => {
 const formatScore = (value: number | undefined, digits = 2) =>
   typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
 
-const statusFromRow = (row: WorkspaceRow): Atom["status"] => {
+const statusFromRow = (row: WorkspaceRow): AssetStatus => {
   if (row.risk_category === "HIGH" || row.risk_category === "ELEVATED") return "fading";
   if (row.viability_score >= 0.85 || row.emergent_trend === "Momentum Breakout") return "rising";
   return "peaking";
 };
 
-const atomFromWorkspaceRow = (row: WorkspaceRow): Atom => ({
-  id: row.script_id,
-  atom: row.title,
-  collective: `${row.genre_primary} · ${row.platform_fit}`,
-  velocity: Math.max(0, row.viability_score * 5),
-  resonance: row.completion_prediction - (row.cultural_risk_score ?? 0),
-  reach: row.market || row.target_demo,
-  spotify: Array.from({ length: 12 }, (_, i) => Math.max(1, Math.round((row.music_momentum_score ?? row.viability_score) * 18 + i / 2))),
-  podcast: Array.from({ length: 12 }, (_, i) => Math.max(1, Math.round(row.completion_prediction * 16 + i / 3))),
-  status: statusFromRow(row),
+const assetFromWorkspaceRow = (row: WorkspaceRow): PortfolioAsset => ({
+  ...row,
+  asset_id: row.script_id,
+  asset_type: "script",
+  status: row.status || statusFromRow(row),
+  narrative_atoms: row.narrative_atoms || [
+    { atom_id: `${row.script_id}:genre`, atom_type: "genre", label: row.genre_primary, source_field: "genre_primary", role: "genre spine" },
+    { atom_id: `${row.script_id}:platform`, atom_type: "platform", label: row.platform_fit, source_field: "platform_fit", role: "distribution fit" },
+    { atom_id: `${row.script_id}:audience`, atom_type: "audience", label: row.target_demo, source_field: "target_demo", role: "target demo" },
+    { atom_id: `${row.script_id}:trend`, atom_type: "trend", label: row.emergent_trend || "Stable Demand", source_field: "emergent_trend", role: "market movement" },
+    { atom_id: `${row.script_id}:risk`, atom_type: "risk", label: row.risk_category, source_field: "risk_category", role: "risk posture" },
+  ],
 });
 
 /* ====================== Main view ======================== */
 
 export const MarketAnatomy = () => {
   const [tab, setTab] = useState<Tab>("anatomy");
+  const [health, setHealth] = useState<HealthResult | null>(null);
+  const [heartbeatError, setHeartbeatError] = useState<string | null>(null);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+
+  const loadHeartbeat = async () => {
+    try {
+      const payload = await mieClient.health();
+      setHealth(payload);
+      setHeartbeatError(null);
+      setLastSync(new Date());
+    } catch (error) {
+      setHeartbeatError(error instanceof Error ? error.message : "Backend heartbeat unavailable");
+    }
+  };
+
+  useEffect(() => {
+    void loadHeartbeat();
+  }, []);
 
   return (
     <section className="fade-up">
@@ -92,8 +101,8 @@ export const MarketAnatomy = () => {
               Quant <span className="italic">Studio.</span>
             </h1>
             <p className="mt-5 max-w-xl text-muted-foreground leading-relaxed">
-              The granular layer for the Orchestrator. Inspect Narrative Atoms,
-              chart Signal Velocity, and tune the neural pipeline at the atomic level.
+              The operator layer for the Orchestrator. Inspect portfolio assets,
+              validate narrative atoms, and monitor the live intelligence pipeline.
             </p>
           </div>
           <div className="text-right">
@@ -101,6 +110,13 @@ export const MarketAnatomy = () => {
             <div className="text-[10px] tracking-couture uppercase text-muted-foreground">Signals processed today</div>
           </div>
         </div>
+
+        <HeartbeatStrip
+          health={health}
+          error={heartbeatError}
+          lastSync={lastSync}
+          onRefresh={() => void loadHeartbeat()}
+        />
 
         {/* Tabs */}
         <div className="mt-8 flex flex-wrap gap-1 p-1 rounded-full bg-white/60 border border-border/60 w-fit shadow-soft">
@@ -122,7 +138,7 @@ export const MarketAnatomy = () => {
       </div>
 
       <div className="px-10 pb-16">
-        {tab === "anatomy"       && <AtomicAnatomy />}
+        {tab === "anatomy"       && <AtomicAnatomy onSynced={() => setLastSync(new Date())} />}
         {tab === "knowledge"     && <KnowledgeBase />}
         {tab === "orchestration" && <OrchestrationLab />}
         {tab === "template"      && <TemplateArchitect />}
@@ -131,10 +147,93 @@ export const MarketAnatomy = () => {
   );
 };
 
-/* ====================== Atomic Anatomy ====================== */
+/* ====================== Operator heartbeat ====================== */
 
-const AtomicAnatomy = () => {
-  const [filter, setFilter] = useState("All Atoms");
+const HeartbeatStrip = ({
+  health,
+  error,
+  lastSync,
+  onRefresh,
+}: {
+  health: HealthResult | null;
+  error: string | null;
+  lastSync: Date | null;
+  onRefresh: () => void;
+}) => {
+  const ops = health?.ops;
+  const items = [
+    {
+      label: "Backend",
+      value: health?.status === "ok" ? "online" : error ? "offline" : "syncing",
+      note: health?.data_dir || "data pending",
+      Icon: Activity,
+      tone: health?.status === "ok" ? "#10B981" : error ? "#F43F5E" : "#F59E0B",
+    },
+    {
+      label: "NIM",
+      value: ops?.nim?.configured ? "configured" : "fallback",
+      note: ops?.nim?.mode || "checking",
+      Icon: Cpu,
+      tone: ops?.nim?.configured ? "#10B981" : "#F59E0B",
+    },
+    {
+      label: "Graph",
+      value: ops?.graph?.active_engine || "unknown",
+      note: ops?.graph?.compute_source || "package scan pending",
+      Icon: Network,
+      tone: ops?.graph?.accelerated_available ? "#10B981" : "#F59E0B",
+    },
+    {
+      label: "Polars",
+      value: `${formatScore(ops?.polars?.latency_ms ?? undefined, 2)}ms`,
+      note: `${formatCompact(ops?.polars?.throughput ?? undefined)} rows/sec`,
+      Icon: Database,
+      tone: "#10B981",
+    },
+  ];
+
+  return (
+    <div className="mt-7 rounded-xl border border-obsidian/10 bg-obsidian text-white shadow-soft overflow-hidden">
+      <div className="grid md:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
+        {items.map(({ label, value, note, Icon, tone }) => (
+          <div key={label} className="min-w-0 px-4 py-3 border-b md:border-b-0 md:border-r border-white/10">
+            <div className="flex items-center gap-2 text-[10px] tracking-couture uppercase text-white/55">
+              <Icon className="h-3.5 w-3.5" style={{ color: tone }} />
+              {label}
+            </div>
+            <div className="mt-1 truncate font-data text-sm" style={{ color: tone }}>{value}</div>
+            <div className="truncate text-[11px] text-white/50">{note}</div>
+          </div>
+        ))}
+        <div className="flex md:flex-col items-center md:items-end justify-between gap-3 px-4 py-3">
+          <div className="min-w-0">
+            <div className="text-[10px] tracking-couture uppercase text-white/45">Last Sync</div>
+            <div className="font-data text-xs text-white/75">
+              {lastSync ? lastSync.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "pending"}
+            </div>
+          </div>
+          <button
+            onClick={onRefresh}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-white/70 hover:text-white hover:border-white/35 transition-colors"
+            aria-label="Refresh heartbeat"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+      {error && (
+        <div className="border-t border-white/10 px-4 py-2 text-[11px] text-[#F43F5E]">
+          {error}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ====================== Portfolio Logic Matrix ====================== */
+
+const AtomicAnatomy = ({ onSynced }: { onSynced: () => void }) => {
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [query, setQuery] = useState("");
   const [workspace, setWorkspace] = useState<WorkspaceResult["result"] | null>(null);
   const [marketSignals, setMarketSignals] = useState<MarketSignal[]>([]);
@@ -142,18 +241,20 @@ const AtomicAnatomy = () => {
   const [loadingBackend, setLoadingBackend] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
 
-  const loadBackend = async () => {
+  const loadBackend = async (nextStatus: StatusFilter = statusFilter) => {
     setLoadingBackend(true);
     setBackendError(null);
     try {
+      const filters = nextStatus === "all" ? {} : { status: nextStatus };
       const [workspacePayload, marketPayload, networkPayload] = await Promise.all([
-        mieClient.workspace({}, 50),
+        mieClient.workspace(filters, 50),
         mieClient.marketSignals(6),
         mieClient.network("spotify_00001", 6),
       ]);
       setWorkspace(workspacePayload.result);
       setMarketSignals(marketPayload.result.top_signals || []);
       setNetwork(networkPayload.result);
+      onSynced();
     } catch (error) {
       setBackendError(error instanceof Error ? error.message : "Backend unavailable");
     } finally {
@@ -163,20 +264,32 @@ const AtomicAnatomy = () => {
 
   useEffect(() => {
     void loadBackend();
-  }, []);
+  }, [statusFilter]);
 
-  const workspaceRows = workspace?.streams?.workspace?.table_rows || [];
+  const workspaceStream = workspace?.streams?.workspace;
+  const workspaceRows = workspaceStream?.table_rows || [];
+  const portfolioAssets = workspaceStream?.portfolio_assets?.length
+    ? workspaceStream.portfolio_assets
+    : workspaceRows.map(assetFromWorkspaceRow);
+  const clusters = workspaceStream?.clusters || [];
   const kpis = workspace?.streams?.workspace?.kpis;
+  const benchmark = workspace?.streams?.workspace?.benchmark;
   const graphSummary = workspace?.streams?.graph?.summary;
-  const liveAtoms = workspaceRows.map(atomFromWorkspaceRow);
-  const sourceAtoms = liveAtoms.length ? liveAtoms : ATOMS;
 
   const rows = useMemo(() =>
-    sourceAtoms.filter((a) => {
-      const f = filter === "All Atoms" || a.status === filter.toLowerCase();
-      const q = a.atom.toLowerCase().includes(query.toLowerCase()) || a.collective.toLowerCase().includes(query.toLowerCase());
-      return f && q;
-    }), [filter, query, sourceAtoms]);
+    portfolioAssets.filter((asset) => {
+      const haystack = [
+        asset.title,
+        asset.script_id,
+        asset.genre_primary,
+        asset.platform_fit,
+        asset.target_demo,
+        asset.market,
+        asset.emergent_trend,
+        ...(asset.narrative_atoms || []).map((atom) => atom.label),
+      ].join(" ").toLowerCase();
+      return haystack.includes(query.toLowerCase());
+    }), [query, portfolioAssets]);
 
   const statCards = [
     {
@@ -204,7 +317,7 @@ const AtomicAnatomy = () => {
           <div className="flex items-center gap-2">
             <Boxes className="h-3.5 w-3.5 text-amethyst" />
             <span className="text-[10px] tracking-couture uppercase text-amethyst">
-              Interactive Map · Backend Signal spotify_00001
+              Signal Map Preview · Backend Signal spotify_00001
             </span>
           </div>
           <div className="flex gap-2">
@@ -216,20 +329,19 @@ const AtomicAnatomy = () => {
               <RefreshCw className={`h-3 w-3 ${loadingBackend ? "animate-spin" : ""}`} />
               Sync
             </button>
-            {["Rotate", "Zoom", "Cluster"].map((m, i) => (
-              <button key={m} className={`text-[10px] tracking-couture uppercase px-3 py-1.5 rounded-full transition-colors
-                ${i===2 ? "bg-gradient-amethyst text-white" : "bg-secondary text-foreground/60 hover:text-obsidian"}`}>{m}</button>
-            ))}
+            <span className="inline-flex items-center text-[10px] tracking-couture uppercase px-3 py-1.5 rounded-full bg-secondary text-muted-foreground">
+              Static layout
+            </span>
           </div>
         </div>
         <div className="relative h-[440px] bg-gradient-iridescent overflow-hidden">
-          <Leiden3DGraph />
+          <Leiden3DGraph clusters={clusters} />
           <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-[10px] tracking-couture uppercase text-obsidian/60">
             <span>
               {formatCompact(graphSummary?.edges)} edges · {formatCompact(graphSummary?.unique_scripts)} scripts · {marketSignals.length || 6} market signals
             </span>
             <span className="text-amethyst">
-              {backendError ? "fallback data" : workspace ? "live backend" : "syncing"}
+              {backendError ? "backend unavailable" : workspace ? "live counts · preview map" : "syncing"}
             </span>
           </div>
         </div>
@@ -249,16 +361,16 @@ const AtomicAnatomy = () => {
         ))}
       </div>
 
-      {/* Atomic Anatomy table — full width */}
+      {/* Portfolio Logic Matrix table — full width */}
       <div className="lg:col-span-2 rounded-2xl border-iridescent bg-white/80 shadow-ethereal overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-5 border-b border-border/60">
           <div>
-            <div className="text-[10px] tracking-couture uppercase text-amethyst">Atomic Anatomy</div>
+            <div className="text-[10px] tracking-couture uppercase text-amethyst">Portfolio Logic Matrix</div>
             <h3 className="font-serif text-2xl text-obsidian">
-              Narrative Atoms · <span className="italic text-muted-foreground">Polars-optimized query</span>
+              Asset Inventory · <span className="italic text-muted-foreground">Polars-optimized query</span>
             </h3>
             <p className="text-xs text-muted-foreground mt-1">
-              {backendError ? "Backend fallback active. Start the API and sync again." : workspace ? "Hydrated from /interactive-workspace." : "Connecting to backend workspace."}
+              {backendError ? "Backend unavailable. Start the API and sync again." : workspace ? "Hydrated from /interactive-workspace portfolio_assets." : "Connecting to backend workspace."}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -267,14 +379,18 @@ const AtomicAnatomy = () => {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="search atoms…"
+                placeholder="search assets…"
                 className="pl-9 pr-3 py-2 bg-lavender/60 border border-border rounded-full text-xs w-56 focus:outline-none focus:border-amethyst"
               />
             </div>
             <div className="flex items-center gap-1 border border-border rounded-full bg-lavender/60 px-3 py-1.5">
               <Filter className="h-3 w-3 text-muted-foreground" />
-              <select value={filter} onChange={(e) => setFilter(e.target.value)} className="bg-transparent text-xs text-obsidian focus:outline-none pr-1">
-                {FILTERS.map((t) => <option key={t}>{t}</option>)}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                className="bg-transparent text-xs text-obsidian focus:outline-none pr-1"
+              >
+                {STATUS_FILTERS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </div>
           </div>
@@ -284,44 +400,62 @@ const AtomicAnatomy = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[10px] tracking-couture uppercase text-muted-foreground">
-                <th className="text-left  font-normal px-6 py-3">narrative_atom</th>
-                <th className="text-left  font-normal px-6 py-3">collective</th>
-                <th className="text-left  font-normal px-6 py-3"><span className="inline-flex items-center gap-1"><Music2 className="h-3 w-3" /> spotify_velocity</span></th>
-                <th className="text-left  font-normal px-6 py-3"><span className="inline-flex items-center gap-1"><Headphones className="h-3 w-3" /> podcast_velocity</span></th>
-                <th className="text-right font-normal px-6 py-3">resonance</th>
-                <th className="text-right font-normal px-6 py-3">reach</th>
+                <th className="text-left  font-normal px-6 py-3">asset</th>
+                <th className="text-left  font-normal px-6 py-3">fit</th>
+                <th className="text-right font-normal px-6 py-3">viability</th>
+                <th className="text-right font-normal px-6 py-3">completion</th>
+                <th className="text-left  font-normal px-6 py-3">trend / risk</th>
+                <th className="text-left  font-normal px-6 py-3">narrative atoms</th>
                 <th className="text-left  font-normal px-6 py-3">status</th>
               </tr>
             </thead>
             <tbody>
               {rows.flatMap((r) => [
-                <tr key={r.id + "-sep"}><td colSpan={7} className="p-0"><div className="h-px w-full bg-gradient-iridescent opacity-70" /></td></tr>,
-                <tr key={r.id} className="hover:bg-lavender/40 transition-colors">
+                <tr key={r.asset_id + "-sep"}><td colSpan={7} className="p-0"><div className="h-px w-full bg-gradient-iridescent opacity-70" /></td></tr>,
+                <tr key={r.asset_id} className="hover:bg-lavender/40 transition-colors">
                   <td className="px-6 py-4">
-                    <div className="font-serif italic text-obsidian">{r.atom}</div>
-                    <div className="text-[10px] tracking-couture uppercase text-muted-foreground">{r.id}</div>
+                    <div className="font-serif italic text-obsidian">{r.title}</div>
+                    <div className="text-[10px] tracking-couture uppercase text-muted-foreground">{r.asset_id} · {r.asset_type}</div>
                   </td>
-                  <td className="px-6 py-4 text-obsidian/80">{r.collective}</td>
-                  <td className="px-6 py-4"><Sparkline data={r.spotify} accent="amethyst" label={`${r.velocity.toFixed(2)}×`} /></td>
-                  <td className="px-6 py-4"><Sparkline data={r.podcast} accent="sky" label={`${(r.velocity * 0.84).toFixed(2)}×`} /></td>
-                  <td className={`px-6 py-4 text-right font-data ${r.resonance >= 0 ? "text-amethyst" : "text-destructive"}`}>
-                    {r.resonance >= 0 ? "+" : ""}{r.resonance.toFixed(2)}
+                  <td className="px-6 py-4 text-obsidian/80">
+                    <div>{r.genre_primary} · {r.platform_fit}</div>
+                    <div className="text-[11px] text-muted-foreground">{r.target_demo} · {r.market || "market n/a"}</div>
                   </td>
-                  <td className="px-6 py-4 text-right font-data text-obsidian/80">{r.reach}</td>
+                  <td className="px-6 py-4 text-right font-data text-obsidian/80">
+                    {formatScore(r.viability_score)}
+                  </td>
+                  <td className="px-6 py-4 text-right font-data text-obsidian/80">
+                    {formatScore(r.completion_prediction)}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-xs text-obsidian/80">{r.emergent_trend || "Stable Demand"}</div>
+                    <div className="font-data text-[11px] text-muted-foreground">risk {r.risk_category}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-wrap gap-1.5 max-w-sm">
+                      {(r.narrative_atoms || []).slice(0, 6).map((atom) => (
+                        <span key={atom.atom_id} className="rounded-full border border-border/70 bg-white/70 px-2 py-0.5 text-[10px] text-obsidian/70">
+                          {atom.atom_type}: {atom.label}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
                   <td className="px-6 py-4"><StatusPill status={r.status} /></td>
                 </tr>,
               ])}
               <tr><td colSpan={7} className="p-0"><div className="h-px w-full bg-gradient-iridescent opacity-70" /></td></tr>
               {rows.length === 0 && (
-                <tr><td colSpan={7} className="px-6 py-12 text-center text-muted-foreground italic font-serif">No atoms match your search.</td></tr>
+                <tr><td colSpan={7} className="px-6 py-12 text-center text-muted-foreground italic font-serif">No assets match your search.</td></tr>
               )}
             </tbody>
           </table>
         </div>
 
         <div className="px-6 py-3 border-t border-border/60 flex items-center justify-between text-[10px] tracking-couture uppercase text-muted-foreground">
-          <span className="font-data normal-case tracking-normal">polars.scan_parquet("atoms.parquet").filter(...).collect()</span>
-          <span className="text-amethyst">{rows.length} rows · {workspace ? "backend" : "local"} </span>
+          <span className="font-data normal-case tracking-normal">
+            polars.scan_parquet("scripts_150k.parquet").filter(status={statusFilter}).collect()
+          </span>
+          <span className="text-amethyst">{rows.length} rows · {formatScore(benchmark?.latency_ms, 2)}ms</span>
         </div>
       </div>
 
@@ -346,23 +480,59 @@ const AtomicAnatomy = () => {
 
 /* ====================== Living Knowledge Base ====================== */
 
-type Insight = {
-  id: string; title: string; collective: string; date: string; tag: string; verdict: "Greenlight"|"Develop"|"Reconsider";
-};
-
-const INSIGHTS: Insight[] = [
-  { id: "AB-2026-042", title: "Soft armour & the dawn-light renaissance", collective: "The Etherealists",     date: "Apr 28, 2026", tag: "Resort 2027",    verdict: "Greenlight" },
-  { id: "AB-2026-041", title: "Why kitchen-sink romance won the quarter", collective: "Grounded Visionaries", date: "Apr 21, 2026", tag: "FW26 Campaign",  verdict: "Greenlight" },
-  { id: "AB-2026-040", title: "The slowcore revival is not a phase",     collective: "Atlantic Brutalists",  date: "Apr 14, 2026", tag: "Sonic Strategy", verdict: "Develop"    },
-  { id: "AB-2026-039", title: "Performative wellness — a graceful exit", collective: "Coastal Grandmothers", date: "Apr 07, 2026", tag: "Sunset Memo",    verdict: "Reconsider" },
-  { id: "AB-2026-038", title: "Lichen, linen, and the Lisbon crossover", collective: "Studio Ceramicists",   date: "Mar 31, 2026", tag: "Color Story",    verdict: "Greenlight" },
-  { id: "AB-2026-037", title: "Archive ferment & the new old money",      collective: "Quiet Luminaries",     date: "Mar 24, 2026", tag: "Heritage Brief", verdict: "Develop"    },
+const DEFAULT_STYLE_TRIBES = [
+  "The Etherealists",
+  "Grounded Visionaries",
+  "Quiet Luminaries",
+  "Signal Maximalists",
+  "Atlantic Brutalists",
+  "Studio Ceramicists",
 ];
+const DEFAULT_VERDICTS: KnowledgeVerdict[] = ["Greenlight", "Develop", "Reconsider"];
 
 const KnowledgeBase = () => {
   const [q, setQ] = useState("");
-  const items = INSIGHTS.filter((i) =>
-    [i.title, i.collective, i.tag, i.id].some((s) => s.toLowerCase().includes(q.toLowerCase())));
+  const [styleTribe, setStyleTribe] = useState("");
+  const [verdict, setVerdict] = useState("");
+  const [items, setItems] = useState<KnowledgeItem[]>([]);
+  const [styleOptions, setStyleOptions] = useState(DEFAULT_STYLE_TRIBES);
+  const [verdictOptions, setVerdictOptions] = useState<KnowledgeVerdict[]>(DEFAULT_VERDICTS);
+  const [latencyMs, setLatencyMs] = useState<number | undefined>();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setError(null);
+      mieClient.knowledgeSearch({
+        query: q,
+        style_tribe: styleTribe || undefined,
+        verdict: verdict ? (verdict as KnowledgeVerdict) : undefined,
+        limit: 24,
+      })
+        .then((payload) => {
+          if (cancelled) return;
+          setItems(payload.result.items || []);
+          setStyleOptions(payload.result.filter_options?.style_tribes || DEFAULT_STYLE_TRIBES);
+          setVerdictOptions(payload.result.filter_options?.verdicts || DEFAULT_VERDICTS);
+          setLatencyMs(payload.result.benchmark?.latency_ms);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setError(err instanceof Error ? err.message : "Knowledge search unavailable");
+          setItems([]);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 180);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [q, styleTribe, verdict]);
 
   return (
     <div className="rounded-2xl border-iridescent bg-white/80 shadow-ethereal overflow-hidden fade-up">
@@ -370,41 +540,74 @@ const KnowledgeBase = () => {
         <div>
           <div className="text-[10px] tracking-couture uppercase text-amethyst">Living Knowledge Base</div>
           <h3 className="font-serif text-2xl text-obsidian">Filing Cabinet <span className="italic text-amethyst">2.0</span></h3>
-          <p className="text-xs text-muted-foreground mt-1 max-w-lg">A breathing archive — every brief is a node, every node a thread.</p>
+          <p className="text-xs text-muted-foreground mt-1 max-w-lg">
+            Hydrated from Polars search across scripts, style tribes, verdicts, and historical context.
+          </p>
         </div>
-        <div className="relative">
-          <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="search insights, collectives, tags…"
-            className="pl-9 pr-3 py-2 bg-lavender/60 border border-border rounded-full text-xs w-72 focus:outline-none focus:border-amethyst"
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="search archive..."
+              className="pl-9 pr-3 py-2 bg-lavender/60 border border-border rounded-full text-xs w-64 focus:outline-none focus:border-amethyst"
+            />
+          </div>
+          <select
+            value={styleTribe}
+            onChange={(e) => setStyleTribe(e.target.value)}
+            className="px-3 py-2 bg-lavender/60 border border-border rounded-full text-xs text-obsidian focus:outline-none focus:border-amethyst"
+          >
+            <option value="">All Style Tribes</option>
+            {styleOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
+          <select
+            value={verdict}
+            onChange={(e) => setVerdict(e.target.value)}
+            className="px-3 py-2 bg-lavender/60 border border-border rounded-full text-xs text-obsidian focus:outline-none focus:border-amethyst"
+          >
+            <option value="">All Verdicts</option>
+            {verdictOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
         </div>
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 p-6">
         {items.map((i) => (
-          <article key={i.id} className="group relative rounded-xl border-iridescent bg-white/70 p-5 shadow-soft hover:shadow-ethereal transition-shadow cursor-pointer">
+          <article key={i.knowledge_id} className="group relative rounded-xl border-iridescent bg-white/70 p-5 shadow-soft hover:shadow-ethereal transition-shadow cursor-pointer">
             <div className="absolute inset-x-0 top-0 h-px iridescent-shimmer opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="flex items-center justify-between text-[10px] tracking-couture uppercase">
-              <span className="text-muted-foreground">{i.date}</span>
+              <span className="text-muted-foreground">{i.published_date}</span>
               <VerdictPill v={i.verdict} />
             </div>
             <h4 className="font-serif text-lg text-obsidian mt-3 leading-snug">{i.title}</h4>
-            <div className="mt-2 text-xs text-muted-foreground">{i.collective}</div>
+            <div className="mt-2 text-xs text-muted-foreground">{i.style_tribe}</div>
+            <div className="mt-3 grid grid-cols-2 gap-2 font-data text-[11px] text-obsidian/70">
+              <span>viability {formatScore(i.viability_score)}</span>
+              <span>risk {formatScore(i.cultural_risk_score)}</span>
+            </div>
             <div className="mt-4 flex items-center justify-between text-[10px] tracking-couture uppercase">
               <span className="px-2 py-0.5 rounded-full bg-sky-pale text-amethyst">{i.tag}</span>
-              <span className="font-data text-muted-foreground">{i.id}</span>
+              <span className="font-data text-muted-foreground">{i.knowledge_id}</span>
             </div>
           </article>
         ))}
-        {items.length === 0 && (
+        {loading && (
           <div className="col-span-full text-center text-muted-foreground italic font-serif py-12">
-            <FolderOpen className="h-6 w-6 mx-auto mb-2 text-periwinkle" />
-            No insights matching "{q}".
+            Searching living knowledge.
           </div>
         )}
+        {!loading && items.length === 0 && (
+          <div className="col-span-full text-center text-muted-foreground italic font-serif py-12">
+            <FolderOpen className="h-6 w-6 mx-auto mb-2 text-periwinkle" />
+            {error ? error : `No archive entries matching "${q}".`}
+          </div>
+        )}
+      </div>
+      <div className="px-6 py-3 border-t border-border/60 flex items-center justify-between text-[10px] tracking-couture uppercase text-muted-foreground">
+        <span className="font-data normal-case tracking-normal">polars.scan_parquet("scripts_150k.parquet").filter(tribe, verdict, query)</span>
+        <span className="text-amethyst">{items.length} entries · {formatScore(latencyMs, 2)}ms</span>
       </div>
     </div>
   );
@@ -431,7 +634,7 @@ const OrchestrationLab = () => {
             <div className="text-[10px] tracking-couture uppercase text-amethyst">Orchestration Lab</div>
             <h3 className="font-serif text-2xl text-obsidian">Tune your agents.</h3>
           </div>
-          <span className="text-[10px] tracking-couture uppercase text-muted-foreground">NeMo-3-Nano · 4 agents</span>
+          <span className="text-[10px] tracking-couture uppercase text-muted-foreground">NAT + Nemotron Nano · 4 agents</span>
         </div>
 
         <div className="mt-6 divide-y divide-border/60">
@@ -571,35 +774,28 @@ const TemplateArchitect = () => {
 
 /* ====================== Small primitives ====================== */
 
-const Sparkline = ({ data, accent, label }: { data: number[]; accent: "amethyst" | "sky"; label: string }) => {
-  const max = Math.max(...data, 1);
+const StatusPill = ({ status }: { status: AssetStatus }) => {
+  const map = {
+    rising:  { color: "#10B981", d: "● rising"  },
+    peaking: { color: "#F59E0B", d: "◆ peaking" },
+    fading:  { color: "#F43F5E", d: "○ fading"  },
+  } as const;
+  const s = map[status];
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex items-end gap-[2px] h-7">
-        {data.map((v, i) => (
-          <span
-            key={i}
-            className={`w-1 rounded-[1px] ${accent === "amethyst" ? "bg-gradient-to-t from-lavender to-amethyst" : "bg-gradient-to-t from-sky-pale to-sky-deep"}`}
-            style={{ height: `${(v / max) * 100}%` }}
-          />
-        ))}
-      </div>
-      <span className="font-data text-xs text-obsidian">{label}</span>
-    </div>
+    <span
+      className="inline-flex items-center text-[10px] tracking-couture uppercase px-2.5 py-1 rounded-full border"
+      style={{
+        color: s.color,
+        borderColor: `${s.color}55`,
+        backgroundColor: `${s.color}14`,
+      }}
+    >
+      {s.d}
+    </span>
   );
 };
 
-const StatusPill = ({ status }: { status: Atom["status"] }) => {
-  const map = {
-    rising:  { c: "bg-amethyst/10 text-amethyst border-amethyst/30",  d: "● rising"  },
-    peaking: { c: "bg-sky-pale text-amethyst border-sky-deep/40",     d: "◆ peaking" },
-    fading:  { c: "bg-secondary text-muted-foreground border-border", d: "○ fading"  },
-  } as const;
-  const s = map[status];
-  return <span className={`inline-flex items-center text-[10px] tracking-couture uppercase px-2.5 py-1 rounded-full border ${s.c}`}>{s.d}</span>;
-};
-
-const VerdictPill = ({ v }: { v: Insight["verdict"] }) => {
+const VerdictPill = ({ v }: { v: KnowledgeVerdict }) => {
   const map = {
     Greenlight:  "bg-amethyst/10 text-amethyst border-amethyst/30",
     Develop:     "bg-sky-pale text-amethyst border-sky-deep/40",
@@ -608,23 +804,25 @@ const VerdictPill = ({ v }: { v: Insight["verdict"] }) => {
   return <span className={`inline-flex items-center text-[10px] tracking-couture uppercase px-2 py-0.5 rounded-full border ${map[v]}`}>{v}</span>;
 };
 
-/* ============== Pseudo-3D Leiden cluster graph ============== */
+/* ============== Backend-driven signal cluster graph ============== */
 
-const Leiden3DGraph = () => {
-  // Three pseudo-3D Leiden clusters, projected with parallax + size for depth.
-  const clusters = [
-    { cx: 28, cy: 42, depth: 1.0, color: "amethyst", label: "Etherealists" },
-    { cx: 64, cy: 36, depth: 0.7, color: "sky",      label: "Visionaries" },
-    { cx: 50, cy: 72, depth: 0.85,color: "amethyst", label: "Ceramicists" },
-  ];
+const DEFAULT_CLUSTERS: MapCluster[] = [
+  { cluster_id: "fallback_001", label: "The Etherealists", style_tribe: "The Etherealists", records: 0, share: 0.34, dominant_verdict: "Greenlight", x: 28, y: 42, depth: 1.0, node_count: 16, color: "#10B981" },
+  { cluster_id: "fallback_002", label: "Grounded Visionaries", style_tribe: "Grounded Visionaries", records: 0, share: 0.28, dominant_verdict: "Develop", x: 64, y: 36, depth: 0.75, node_count: 14, color: "#F59E0B" },
+  { cluster_id: "fallback_003", label: "Studio Ceramicists", style_tribe: "Studio Ceramicists", records: 0, share: 0.2, dominant_verdict: "Reconsider", x: 50, y: 72, depth: 0.85, node_count: 12, color: "#F43F5E" },
+];
+
+const Leiden3DGraph = ({ clusters: backendClusters }: { clusters: MapCluster[] }) => {
+  const clusters = backendClusters.length ? backendClusters : DEFAULT_CLUSTERS;
 
   const nodes = clusters.flatMap((c, ci) =>
-    Array.from({ length: 16 }).map((_, i) => {
-      const angle = (i / 16) * Math.PI * 2 + ci;
-      const r = 8 + (i % 4) * 2;
-      const x = c.cx + Math.cos(angle) * r * c.depth;
-      const y = c.cy + Math.sin(angle) * r * c.depth * 0.7;
-      const size = 0.8 + (Math.sin(i + ci) + 1) * 0.6 * c.depth;
+    Array.from({ length: Math.max(6, Math.min(c.node_count || 12, 28)) }).map((_, i) => {
+      const count = Math.max(1, c.node_count || 12);
+      const angle = (i / count) * Math.PI * 2 + ci;
+      const r = 7 + (i % 4) * 2.1;
+      const x = c.x + Math.cos(angle) * r * c.depth;
+      const y = c.y + Math.sin(angle) * r * c.depth * 0.7;
+      const size = 0.75 + (Math.sin(i + ci) + 1) * 0.55 * c.depth;
       return { x, y, size, color: c.color, ci };
     })
   );
@@ -637,28 +835,24 @@ const Leiden3DGraph = () => {
       edges.push([i, j]);
     }
   }
-  // a few cross-cluster bridges
-  edges.push([2, 18], [4, 36], [20, 40], [12, 28]);
+  for (let i = 0; i < clusters.length - 1; i++) {
+    const source = nodes.findIndex((node) => node.ci === i);
+    const target = nodes.findIndex((node) => node.ci === i + 1);
+    if (source >= 0 && target >= 0) edges.push([source, target]);
+  }
 
   return (
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
       <defs>
-        <radialGradient id="g3dAmethyst" cx="40%" cy="40%" r="60%">
-          <stop offset="0%"  stopColor="hsl(263 80% 90%)" />
-          <stop offset="100%" stopColor="hsl(263 50% 55%)" />
-        </radialGradient>
-        <radialGradient id="g3dSky" cx="40%" cy="40%" r="60%">
-          <stop offset="0%"  stopColor="hsl(199 95% 92%)" />
-          <stop offset="100%" stopColor="hsl(232 70% 70%)" />
-        </radialGradient>
         <filter id="g3dGlow"><feGaussianBlur stdDeviation="0.6" /></filter>
       </defs>
 
-      {/* halos behind clusters */}
       {clusters.map((c, i) => (
-        <ellipse key={i} cx={c.cx} cy={c.cy} rx={16 * c.depth} ry={11 * c.depth}
-          fill={c.color === "amethyst" ? "hsl(263 60% 80% / 0.35)" : "hsl(199 80% 85% / 0.45)"}
-          filter="url(#g3dGlow)" />
+        <ellipse key={c.cluster_id || i} cx={c.x} cy={c.y} rx={16 * c.depth} ry={11 * c.depth}
+          fill={c.color}
+          opacity="0.18"
+          filter="url(#g3dGlow)"
+        />
       ))}
 
       {edges.map(([a, b], i) => {
@@ -669,13 +863,13 @@ const Leiden3DGraph = () => {
 
       {nodes.map((n, i) => (
         <g key={i}>
-          <circle cx={n.x} cy={n.y} r={n.size + 1.6} fill={n.color === "amethyst" ? "url(#g3dAmethyst)" : "url(#g3dSky)"} opacity="0.18" />
-          <circle cx={n.x} cy={n.y} r={n.size} fill={n.color === "amethyst" ? "url(#g3dAmethyst)" : "url(#g3dSky)"} stroke="hsl(252 100% 98%)" strokeWidth="0.18" />
+          <circle cx={n.x} cy={n.y} r={n.size + 1.6} fill={n.color} opacity="0.16" />
+          <circle cx={n.x} cy={n.y} r={n.size} fill={n.color} stroke="hsl(252 100% 98%)" strokeWidth="0.18" />
         </g>
       ))}
 
       {clusters.map((c) => (
-        <text key={c.label} x={c.cx} y={c.cy - 13} fontSize="2" textAnchor="middle"
+        <text key={c.cluster_id || c.label} x={c.x} y={c.y - 13} fontSize="2" textAnchor="middle"
               fill="hsl(257 44% 20%)" fontFamily="Playfair Display" fontStyle="italic">
           {c.label}
         </text>

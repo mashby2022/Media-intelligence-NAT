@@ -96,6 +96,9 @@ Never commit API keys.
 ## API Routes
 
 - `GET /health`
+- `GET /config/public`
+- `GET /demo/readiness`
+- `GET /demo/workflow-run`
 - `GET /gpu-demo/status`
 - `POST /generate-brief`
 - `POST /interactive-workspace`
@@ -123,7 +126,7 @@ See `docs/lovable_handoff.md` for the frontend contract.
 `/generate-brief` now supports runtime reasoning controls:
 
 - `reasoning_mode`: `auto` | `deterministic` | `nim`
-- `reasoning_model`: `nano` | `super`
+- `reasoning_model`: `nano`
 
 In `auto`, the API uses deterministic synthesis unless `NVIDIA_API_KEY`/`NGC_API_KEY` is configured.
 
@@ -151,5 +154,5 @@ python -m pytest
 Expected result:
 
 ```text
-9 passed
+12 passed
 ```

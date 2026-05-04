@@ -16,10 +16,10 @@ Current hosted Lovable app:
 https://aura-intelligence-flow.lovable.app
 ```
 
-Current backend tunnel to set in Lovable:
+Current backend tunnel to set in Lovable should be generated fresh before each hosted demo:
 
 ```text
-https://flatterer-imitation-figurine.ngrok-free.dev
+https://YOUR-NGROK-URL.ngrok-free.dev
 ```
 
 For hosted Lovable preview domains, add the preview origin to CORS:
@@ -33,6 +33,9 @@ MIE_CORS_ORIGINS="https://aura-intelligence-flow.lovable.app" python -m uvicorn 
 Lovable should inspect these first:
 
 ```text
+GET /config/public
+GET /demo/readiness
+GET /demo/workflow-run
 GET /health
 GET /frontend-contract
 GET /openapi.json
@@ -65,6 +68,16 @@ Content-Type: application/json
 
 Use for the Executive Brief page. Render `result.headline`, `result.recommended_candidates`, and `result.benchmark`.
 
+Model inventory:
+
+- `nano`: `nvidia/nvidia-nemotron-nano-9b-v2`
+
+Model adapter demo:
+
+- `GET /models/adapters` returns the active Nemotron Nano adapter and preview-only BYOM patterns.
+- `POST /models/preview-switch` validates a customer model adapter proposal without changing the live runtime.
+- The live Lovable demo should continue sending `reasoning_model: "nano"`.
+
 For live model-backed summaries, include:
 
 ```json
@@ -77,7 +90,7 @@ For live model-backed summaries, include:
 Accepted values:
 
 - `reasoning_mode`: `auto` | `deterministic` | `nim`
-- `reasoning_model`: `nano` | `super`
+- `reasoning_model`: `nano`
 
 ### Executive Inbox Dispatch
 
@@ -261,7 +274,7 @@ type AppState = {
   marketSignalLimit: number;
   recipients: string[];
   reasoningMode: "auto" | "deterministic" | "nim";
-  reasoningModel: "nano" | "super";
+  reasoningModel: "nano";
   loading: boolean;
   error?: string;
 };
@@ -278,7 +291,7 @@ VITE_MIE_REASONING_MODE=auto
 VITE_MIE_REASONING_MODEL=nano
 ```
 
-If using Brev/ngrok/public backend, set `VITE_MIE_API_BASE_URL` to that HTTPS URL.
+If using Brev/ngrok/public backend, set `VITE_MIE_API_BASE_URL` to that HTTPS URL. For the hosted Lovable app, do not use `127.0.0.1`.
 
 ## Frontend API Client Mapping
 
@@ -300,6 +313,9 @@ async function post(path: string, body: unknown) {
 }
 
 export const mieClient = {
+  publicConfig: () => fetch(`${API_BASE}/config/public`).then((r) => r.json()),
+  demoReadiness: () => fetch(`${API_BASE}/demo/readiness`).then((r) => r.json()),
+  demoWorkflowRun: () => fetch(`${API_BASE}/demo/workflow-run`).then((r) => r.json()),
   health: () => fetch(`${API_BASE}/health`).then((r) => r.json()),
   frontendContract: () => fetch(`${API_BASE}/frontend-contract`).then((r) => r.json()),
   orchestratorTools: () => fetch(`${API_BASE}/orchestrator/tools`).then((r) => r.json()),
@@ -342,8 +358,11 @@ export const mieClient = {
 
 ## Acceptance Criteria
 
-Phase 5 is complete when Lovable can:
+Pre-Lovable reconnect is ready when Lovable can:
 
+- Read `GET /config/public`
+- Read `GET /demo/readiness`
+- Read `GET /demo/workflow-run`
 - Read `GET /frontend-contract`
 - Read `GET /openapi.json`
 - Render the Executive Brief from `/generate-brief`

@@ -13,6 +13,16 @@ from engine.data_generator import _detect_effective_mode
 
 
 DEFAULT_DATA_DIR = Path("data")
+ASSET_STATUSES = ["rising", "peaking", "fading"]
+STYLE_TRIBES = [
+    "The Etherealists",
+    "Grounded Visionaries",
+    "Quiet Luminaries",
+    "Signal Maximalists",
+    "Atlantic Brutalists",
+    "Studio Ceramicists",
+]
+VERDICTS = ["Greenlight", "Develop", "Reconsider"]
 
 
 def compute_source_label() -> str:
@@ -131,6 +141,17 @@ def _emergent_trend_expr() -> pl.Expr:
     )
 
 
+def _asset_status_expr() -> pl.Expr:
+    return (
+        pl.when(pl.col("risk_category").is_in(["HIGH", "ELEVATED"]))
+        .then(pl.lit("fading"))
+        .when((pl.col("viability_score") >= 0.85) | (pl.col("emergent_trend") == "Momentum Breakout"))
+        .then(pl.lit("rising"))
+        .otherwise(pl.lit("peaking"))
+        .alias("status")
+    )
+
+
 def with_operator_fields(scripts: pl.DataFrame) -> pl.DataFrame:
     """Add Phase 2 operator fields without mutating the stored Parquet schema."""
 
@@ -144,6 +165,9 @@ def with_operator_fields(scripts: pl.DataFrame) -> pl.DataFrame:
         "cultural_risk_score": 0.5,
         "genre_primary": "Unknown",
         "platform_fit": "Unknown",
+        "target_demo": "Unknown",
+        "market": "Unknown",
+        "risk_category": "MODERATE",
     }
     missing_defaults = [
         pl.lit(value).alias(column) for column, value in defaults.items() if column not in scripts.columns
@@ -163,7 +187,7 @@ def with_operator_fields(scripts: pl.DataFrame) -> pl.DataFrame:
 
 def _apply_script_filters(scripts: pl.DataFrame, filters: dict[str, Any] | None = None) -> pl.DataFrame:
     filters = filters or {}
-    filtered = with_operator_fields(scripts)
+    filtered = with_operator_fields(scripts).with_columns(_asset_status_expr())
     for column, key in [
         ("genre_primary", "genre"),
         ("platform_fit", "platform"),
@@ -182,12 +206,287 @@ def _apply_script_filters(scripts: pl.DataFrame, filters: dict[str, Any] | None 
     max_risk = filters.get("max_risk")
     if max_risk is not None:
         filtered = filtered.filter(pl.col("cultural_risk_score") <= float(max_risk))
+    status = filters.get("status")
+    if status and str(status).lower() != "all":
+        filtered = filtered.filter(pl.col("status") == str(status).lower())
     return filtered
+
+
+def _narrative_atoms_for_asset(row: dict[str, Any]) -> list[dict[str, str]]:
+    fields = [
+        ("genre", "genre_primary", "genre spine"),
+        ("platform", "platform_fit", "distribution fit"),
+        ("audience", "target_demo", "target demo"),
+        ("trend", "emergent_trend", "market movement"),
+        ("risk", "risk_category", "risk posture"),
+        ("market", "market", "territory"),
+    ]
+    atoms: list[dict[str, str]] = []
+    for atom_type, source_field, role in fields:
+        value = row.get(source_field)
+        if value is None or str(value).strip() == "":
+            continue
+        atoms.append(
+            {
+                "atom_id": f"{row.get('script_id', 'asset')}:{atom_type}",
+                "atom_type": atom_type,
+                "label": str(value),
+                "source_field": source_field,
+                "role": role,
+            }
+        )
+    return atoms
+
+
+def _portfolio_asset(row: dict[str, Any]) -> dict[str, Any]:
+    asset = dict(row)
+    asset["asset_id"] = str(row.get("script_id", ""))
+    asset["asset_type"] = "script"
+    asset["narrative_atoms"] = _narrative_atoms_for_asset(row)
+    return asset
+
+
+def _style_tribe_expr() -> pl.Expr:
+    return (
+        pl.when(
+            (pl.col("genre_primary").is_in(["Drama", "Romance"]))
+            & (pl.col("target_demo").is_in(["Gen Z", "Female 18-34", "LGBTQ+"]))
+        )
+        .then(pl.lit("The Etherealists"))
+        .when((pl.col("genre_primary").is_in(["Drama", "Comedy"])) & (pl.col("platform_fit").is_in(["Streaming", "Broadcast"])))
+        .then(pl.lit("Grounded Visionaries"))
+        .when(pl.col("genre_primary").is_in(["Historical", "Documentary"]))
+        .then(pl.lit("Quiet Luminaries"))
+        .when(pl.col("genre_primary").is_in(["Action", "Sci-Fi", "Fantasy"]))
+        .then(pl.lit("Signal Maximalists"))
+        .when(pl.col("genre_primary").is_in(["Thriller", "Mystery"]))
+        .then(pl.lit("Atlantic Brutalists"))
+        .otherwise(pl.lit("Studio Ceramicists"))
+        .alias("style_tribe")
+    )
+
+
+def _verdict_expr() -> pl.Expr:
+    return (
+        pl.when(pl.col("status") == "rising")
+        .then(pl.lit("Greenlight"))
+        .when(pl.col("status") == "peaking")
+        .then(pl.lit("Develop"))
+        .otherwise(pl.lit("Reconsider"))
+        .alias("verdict")
+    )
+
+
+def with_knowledge_fields(scripts: pl.DataFrame) -> pl.DataFrame:
+    enriched = with_operator_fields(scripts).with_columns(_asset_status_expr()).with_columns(_style_tribe_expr())
+    return enriched.with_columns(_verdict_expr())
+
+
+def _knowledge_item(row: dict[str, Any]) -> dict[str, Any]:
+    script_number = int(str(row["script_id"]).split("_")[-1])
+    month = (script_number % 12) + 1
+    day = (script_number % 27) + 1
+    item = dict(row)
+    item["knowledge_id"] = f"AB-2026-{(script_number % 900) + 100:03d}"
+    item["published_date"] = f"2026-{month:02d}-{day:02d}"
+    item["tag"] = str(row.get("emergent_trend") or row.get("budget_tier") or "Portfolio Signal")
+    item["narrative_atoms"] = _narrative_atoms_for_asset(row)
+    return item
+
+
+def knowledge_search_evidence(
+    data_dir: Path = DEFAULT_DATA_DIR,
+    query: str = "",
+    style_tribe: str | None = None,
+    verdict: str | None = None,
+    limit: int = 24,
+) -> dict[str, Any]:
+    started_at = time.perf_counter()
+    scripts = with_knowledge_fields(load_scripts(data_dir))
+    rows_processed = scripts.height
+    filtered = scripts
+    if style_tribe:
+        filtered = filtered.filter(pl.col("style_tribe") == style_tribe)
+    if verdict:
+        filtered = filtered.filter(pl.col("verdict") == verdict)
+    q = query.strip().lower()
+    if q:
+        filtered = filtered.filter(
+            pl.any_horizontal(
+                [
+                    pl.col(column).cast(pl.Utf8).str.to_lowercase().str.contains(q, literal=True)
+                    for column in [
+                        "script_id",
+                        "title",
+                        "genre_primary",
+                        "platform_fit",
+                        "target_demo",
+                        "market",
+                        "emergent_trend",
+                        "style_tribe",
+                        "verdict",
+                    ]
+                ]
+            )
+        )
+
+    rows = (
+        filtered.sort(["viability_score", "completion_prediction"], descending=[True, True])
+        .select(
+            "script_id",
+            "title",
+            "genre_primary",
+            "platform_fit",
+            "target_demo",
+            "market",
+            "budget_tier",
+            "emergent_trend",
+            "viability_score",
+            "completion_prediction",
+            "cultural_risk_score",
+            "risk_category",
+            "status",
+            "style_tribe",
+            "verdict",
+        )
+        .head(limit)
+        .to_dicts()
+    )
+    return {
+        "evidence_type": "living_knowledge_search",
+        "query": query,
+        "filters": {"style_tribe": style_tribe, "verdict": verdict},
+        "filter_options": {"style_tribes": STYLE_TRIBES, "verdicts": VERDICTS},
+        "items": [_knowledge_item(row) for row in rows],
+        "benchmark": _benchmark(started_at, rows_processed),
+    }
+
+
+def _cluster_map_rows(scripts: pl.DataFrame, limit: int = 6) -> list[dict[str, Any]]:
+    if scripts.is_empty():
+        return []
+    clustered = with_knowledge_fields(scripts)
+    rows = (
+        clustered.group_by("style_tribe")
+        .agg(
+            pl.len().alias("records"),
+            pl.col("viability_score").mean().round(4).alias("avg_viability"),
+            pl.col("cultural_risk_score").mean().round(4).alias("avg_cultural_risk"),
+            pl.col("verdict").mode().first().alias("dominant_verdict"),
+            pl.col("emergent_trend").mode().first().alias("dominant_trend"),
+        )
+        .sort("records", descending=True)
+        .head(limit)
+        .to_dicts()
+    )
+    coordinates = [(28, 42), (64, 36), (50, 72), (76, 66), (35, 76), (52, 28)]
+    colors = {"Greenlight": "#10B981", "Develop": "#F59E0B", "Reconsider": "#F43F5E"}
+    total = max(sum(int(row["records"]) for row in rows), 1)
+    clusters: list[dict[str, Any]] = []
+    for idx, row in enumerate(rows):
+        x, y = coordinates[idx % len(coordinates)]
+        share = int(row["records"]) / total
+        clusters.append(
+            {
+                "cluster_id": f"cluster_{idx + 1:03d}",
+                "label": row["style_tribe"],
+                "style_tribe": row["style_tribe"],
+                "records": row["records"],
+                "share": round(share, 4),
+                "avg_viability": row["avg_viability"],
+                "avg_cultural_risk": row["avg_cultural_risk"],
+                "dominant_verdict": row["dominant_verdict"],
+                "dominant_trend": row["dominant_trend"],
+                "x": x,
+                "y": y,
+                "depth": round(0.68 + min(share * 2.2, 0.42), 3),
+                "node_count": max(8, min(24, round(8 + share * 42))),
+                "color": colors.get(str(row["dominant_verdict"]), "#8B5CF6"),
+            }
+        )
+    return clusters
+
+
+def historical_memory_evidence(
+    data_dir: Path = DEFAULT_DATA_DIR,
+    seed_asset: dict[str, Any] | None = None,
+    limit: int = 5,
+) -> dict[str, Any]:
+    """Find deterministic lookalike projects from the stored Parquet knowledge base."""
+
+    started_at = time.perf_counter()
+    scripts = with_operator_fields(load_scripts(data_dir)).with_columns(_asset_status_expr())
+    rows_processed = scripts.height
+    seed_asset = seed_asset or {}
+    seed_id = str(seed_asset.get("script_id", ""))
+    seed_genre = seed_asset.get("genre_primary")
+    seed_platform = seed_asset.get("platform_fit")
+    seed_demo = seed_asset.get("target_demo")
+    seed_market = seed_asset.get("market")
+    seed_trend = seed_asset.get("emergent_trend")
+    seed_viability = float(seed_asset.get("viability_score", 0.72) or 0.72)
+    seed_risk = float(seed_asset.get("cultural_risk_score", 0.28) or 0.28)
+
+    candidates = scripts
+    if seed_id:
+        candidates = candidates.filter(pl.col("script_id") != seed_id)
+
+    score_expr = (
+        (pl.when(pl.col("genre_primary") == seed_genre).then(0.25).otherwise(0.0))
+        + (pl.when(pl.col("platform_fit") == seed_platform).then(0.18).otherwise(0.0))
+        + (pl.when(pl.col("target_demo") == seed_demo).then(0.18).otherwise(0.0))
+        + (pl.when(pl.col("market") == seed_market).then(0.12).otherwise(0.0))
+        + (1 - (pl.col("viability_score") - seed_viability).abs()).clip(0, 1) * 0.10
+        + (1 - (pl.col("cultural_risk_score") - seed_risk).abs()).clip(0, 1) * 0.05
+    )
+    if seed_trend:
+        score_expr = score_expr + (pl.when(pl.col("emergent_trend") == seed_trend).then(0.12).otherwise(0.0))
+    scored = candidates.with_columns(score_expr.round(4).alias("memory_similarity"))
+
+    rows = (
+        scored.sort(["memory_similarity", "viability_score"], descending=[True, True])
+        .select(
+            "script_id",
+            "title",
+            "genre_primary",
+            "platform_fit",
+            "target_demo",
+            "market",
+            "budget_tier",
+            "emergent_trend",
+            "viability_score",
+            "completion_prediction",
+            "cultural_risk_score",
+            "risk_category",
+            "status",
+            "memory_similarity",
+        )
+        .head(limit)
+        .to_dicts()
+    )
+    periods = ["2025 Q1", "2025 Q2", "2025 Q3", "2025 Q4", "2026 Q1"]
+    matches: list[dict[str, Any]] = []
+    for row in rows:
+        script_number = int(str(row["script_id"]).split("_")[-1])
+        row["memory_id"] = f"memory_{script_number:06d}"
+        row["memory_period"] = periods[script_number % len(periods)]
+        row["reason"] = (
+            f"{row['genre_primary']} / {row['platform_fit']} / {row['target_demo']} "
+            f"with {row['emergent_trend']} pattern"
+        )
+        matches.append(row)
+
+    return {
+        "evidence_type": "historical_memory",
+        "seed_asset_id": seed_id or None,
+        "matches": matches,
+        "benchmark": _benchmark(started_at, rows_processed),
+    }
 
 
 def portfolio_evidence(data_dir: Path = DEFAULT_DATA_DIR, limit: int = 10) -> dict[str, Any]:
     started_at = time.perf_counter()
-    scripts = load_scripts(data_dir)
+    scripts = with_operator_fields(load_scripts(data_dir))
     rows_processed = scripts.height
 
     summary = scripts.select(
@@ -216,8 +515,11 @@ def portfolio_evidence(data_dir: Path = DEFAULT_DATA_DIR, limit: int = 10) -> di
             "platform_fit",
             "target_demo",
             "market",
+            "budget_tier",
+            "emergent_trend",
             "viability_score",
             "completion_prediction",
+            "cultural_risk_score",
             "risk_category",
             "music_momentum_score",
         )
@@ -271,7 +573,7 @@ def workspace_evidence(
     limit: int = 250,
 ) -> dict[str, Any]:
     started_at = time.perf_counter()
-    scripts = with_operator_fields(load_scripts(data_dir))
+    scripts = with_operator_fields(load_scripts(data_dir)).with_columns(_asset_status_expr())
     filtered = _apply_script_filters(scripts, filters)
     rows_processed = scripts.height
 
@@ -285,7 +587,9 @@ def workspace_evidence(
         }
         scatter_points: list[dict[str, Any]] = []
         table_rows: list[dict[str, Any]] = []
+        portfolio_assets: list[dict[str, Any]] = []
         segment_breakdown: list[dict[str, Any]] = []
+        clusters: list[dict[str, Any]] = []
     else:
         kpis = filtered.select(
             pl.len().alias("records"),
@@ -308,6 +612,7 @@ def workspace_evidence(
             "music_momentum_score",
             "budget_tier",
             "emergent_trend",
+            "status",
         ).to_dicts()
         table_rows = ranked.select(
             "script_id",
@@ -322,6 +627,23 @@ def workspace_evidence(
             "completion_prediction",
             "risk_category",
         ).to_dicts()
+        asset_rows = ranked.select(
+            "script_id",
+            "title",
+            "genre_primary",
+            "platform_fit",
+            "target_demo",
+            "market",
+            "budget_tier",
+            "emergent_trend",
+            "viability_score",
+            "completion_prediction",
+            "cultural_risk_score",
+            "risk_category",
+            "music_momentum_score",
+            "status",
+        ).to_dicts()
+        portfolio_assets = [_portfolio_asset(row) for row in asset_rows]
         segment_breakdown = (
             filtered.group_by(["genre_primary", "platform_fit"])
             .agg(
@@ -333,6 +655,7 @@ def workspace_evidence(
             .head(20)
             .to_dicts()
         )
+        clusters = _cluster_map_rows(filtered)
 
     filter_options = {
         "genres": scripts.get_column("genre_primary").unique().sort().to_list(),
@@ -342,6 +665,7 @@ def workspace_evidence(
         "risk_categories": scripts.get_column("risk_category").unique().sort().to_list(),
         "budget_tiers": scripts.get_column("budget_tier").unique().sort().to_list(),
         "emergent_trends": scripts.get_column("emergent_trend").unique().sort().to_list(),
+        "statuses": ASSET_STATUSES,
     }
 
     return {
@@ -351,7 +675,9 @@ def workspace_evidence(
         "kpis": kpis,
         "scatter_points": scatter_points,
         "table_rows": table_rows,
+        "portfolio_assets": portfolio_assets,
         "segment_breakdown": segment_breakdown,
+        "clusters": clusters,
         "benchmark": _benchmark(started_at, rows_processed),
     }
 

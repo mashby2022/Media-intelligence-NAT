@@ -31,7 +31,7 @@ class GenerateBriefRequest(BaseModel):
     data_dir: str = "data"
     candidate_limit: int = Field(default=10, ge=1, le=100)
     reasoning_mode: Literal["auto", "deterministic", "nim"] = "auto"
-    reasoning_model: Literal["nano", "super"] = "nano"
+    reasoning_model: Literal["nano"] = "nano"
     white_label: WhiteLabelConfig = Field(default_factory=WhiteLabelConfig)
 
 
@@ -55,13 +55,25 @@ class MarketSignalsRequest(BaseModel):
     white_label: WhiteLabelConfig = Field(default_factory=WhiteLabelConfig)
 
 
+class KnowledgeSearchRequest(BaseModel):
+    data_dir: str = "data"
+    query: str = ""
+    style_tribe: str | None = None
+    verdict: Literal["Greenlight", "Develop", "Reconsider"] | None = None
+    limit: int = Field(default=24, ge=1, le=100)
+    white_label: WhiteLabelConfig = Field(default_factory=WhiteLabelConfig)
+
+
 class ExecutiveDispatchRequest(BaseModel):
     role: Literal["executive"] = "executive"
     data_dir: str = "data"
     candidate_limit: int = Field(default=10, ge=1, le=100)
     reasoning_mode: Literal["auto", "deterministic", "nim"] = "auto"
-    reasoning_model: Literal["nano", "super"] = "nano"
+    reasoning_model: Literal["nano"] = "nano"
     recipients: list[str] = Field(default_factory=list)
+    template: str | None = None
+    output_formats: list[Literal["html", "markdown", "pdf", "slides"]] = Field(default_factory=lambda: ["html"])
+    auto_verify: bool = False
     white_label: WhiteLabelConfig = Field(default_factory=WhiteLabelConfig)
 
 
@@ -73,8 +85,15 @@ class ChatMessage(BaseModel):
 class MirandaChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(default_factory=list)
     reasoning_mode: Literal["auto", "deterministic", "nim"] = "auto"
-    reasoning_model: Literal["nano", "super"] = "nano"
+    reasoning_model: Literal["nano"] = "nano"
     white_label: WhiteLabelConfig = Field(default_factory=WhiteLabelConfig)
+
+
+class ModelPreviewSwitchRequest(BaseModel):
+    provider: str = Field(default="nim", min_length=2, max_length=48)
+    model: str = Field(default="nvidia/nvidia-nemotron-nano-9b-v2", min_length=3, max_length=160)
+    auth_mode: Literal["env_secret", "customer_managed", "none"] = "env_secret"
+    purpose: Literal["executive_brief", "operator_analysis", "chat"] = "executive_brief"
 
 
 class CandidateRow(BaseModel):
@@ -102,6 +121,8 @@ class BriefResult(BaseModel):
     recommended_candidates: list[dict[str, Any]] = Field(default_factory=list)
     boosted_scripts: list[dict[str, Any]] = Field(default_factory=list)
     vulnerable_scripts: list[dict[str, Any]] = Field(default_factory=list)
+    memory_matches: list[dict[str, Any]] = Field(default_factory=list)
+    reasoning_trace: list[dict[str, Any]] = Field(default_factory=list)
     benchmark: dict[str, Any] | None = None
     source_evidence: dict[str, Any]
 
@@ -160,6 +181,10 @@ class ExecutiveDispatchResult(BaseModel):
     markdown_body: str
     html_body: str
     dispatch_ready: bool
+    dispatch_status: str = "draft_ready"
+    auto_verified: bool = False
+    rendered_template: str | None = None
+    generated_artifacts: list[dict[str, Any]] = Field(default_factory=list)
     source_brief: BriefResult
 
 
@@ -176,6 +201,7 @@ class HealthResponse(BaseModel):
     graph_engine: GraphEngineMeta
     accelerated_visuals: dict[str, Any]
     gpu_demo: dict[str, Any]
+    ops: dict[str, Any] = Field(default_factory=dict)
 
 
 class MirandaChatResult(BaseModel):

@@ -2,8 +2,8 @@ from pathlib import Path
 
 import polars as pl
 
-from engine.analytics import cultural_signal_network_evidence, graph_engine_capabilities, market_signal_evidence, portfolio_evidence
-from agent.tools import analyze_cultural_signal_network, get_market_signal_evidence, synthesize_evidence
+from engine.analytics import cultural_signal_network_evidence, graph_engine_capabilities, historical_memory_evidence, knowledge_search_evidence, market_signal_evidence, portfolio_evidence
+from agent.tools import analyze_cultural_signal_network, get_market_signal_evidence, query_historical_memory, search_living_knowledge, synthesize_evidence
 from engine.data_generator import build_cultural_graph_edges, generate_scripts
 from engine.market_ingestion import run as run_market_ingestion
 from engine.visuals import accelerated_visual_capabilities, stand_up_cuxfilter_server, workspace_payload
@@ -105,6 +105,82 @@ def test_portfolio_evidence_and_synthesis_are_structured(tmp_path: Path) -> None
     assert len(brief["recommended_candidates"]) == 1
 
 
+def test_historical_memory_finds_lookalike_projects(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    pl.DataFrame(
+        {
+            "script_id": ["script_000001", "script_000002", "script_000003"],
+            "title": ["Seed", "Lookalike", "Different"],
+            "genre_primary": ["Drama", "Drama", "Comedy"],
+            "platform_fit": ["Streaming", "Streaming", "FAST"],
+            "target_demo": ["Gen Z", "Gen Z", "Millennial"],
+            "market": ["Global", "Global", "United States"],
+            "viability_score": [0.9, 0.88, 0.5],
+            "completion_prediction": [0.8, 0.78, 0.4],
+            "cultural_risk_score": [0.2, 0.22, 0.6],
+            "risk_category": ["LOW", "LOW", "ELEVATED"],
+            "music_momentum_score": [0.84, 0.82, 0.6],
+        }
+    ).write_parquet(data_dir / "scripts_150k.parquet")
+
+    memory = historical_memory_evidence(
+        data_dir=data_dir,
+        seed_asset={
+            "script_id": "script_000001",
+            "genre_primary": "Drama",
+            "platform_fit": "Streaming",
+            "target_demo": "Gen Z",
+            "market": "Global",
+            "viability_score": 0.9,
+            "cultural_risk_score": 0.2,
+        },
+        limit=2,
+    )
+    tool_memory = query_historical_memory(data_dir=str(data_dir), seed_asset=memory["matches"][0], limit=1)
+
+    assert memory["evidence_type"] == "historical_memory"
+    assert memory["matches"][0]["script_id"] == "script_000002"
+    assert memory["matches"][0]["memory_period"].startswith("202")
+    assert tool_memory["matches"]
+
+
+def test_knowledge_search_filters_by_tribe_and_verdict(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    pl.DataFrame(
+        {
+            "script_id": ["script_000001", "script_000002", "script_000003"],
+            "title": ["Dawn Signal", "Night Signal", "Archive Memo"],
+            "genre_primary": ["Romance", "Thriller", "Documentary"],
+            "platform_fit": ["Streaming", "FAST", "Broadcast"],
+            "target_demo": ["Gen Z", "Millennial", "Prestige Adult"],
+            "market": ["Global", "Global", "United States"],
+            "viability_score": [0.91, 0.54, 0.72],
+            "completion_prediction": [0.86, 0.42, 0.68],
+            "cultural_risk_score": [0.19, 0.72, 0.24],
+            "risk_category": ["LOW", "HIGH", "LOW"],
+            "music_momentum_score": [0.85, 0.5, 0.62],
+        }
+    ).write_parquet(data_dir / "scripts_150k.parquet")
+
+    evidence = knowledge_search_evidence(
+        data_dir=data_dir,
+        query="Dawn",
+        style_tribe="The Etherealists",
+        verdict="Greenlight",
+        limit=5,
+    )
+    tool_evidence = search_living_knowledge(data_dir=str(data_dir), verdict="Reconsider", limit=5)
+
+    assert evidence["evidence_type"] == "living_knowledge_search"
+    assert evidence["items"][0]["title"] == "Dawn Signal"
+    assert evidence["items"][0]["style_tribe"] == "The Etherealists"
+    assert evidence["items"][0]["verdict"] == "Greenlight"
+    assert evidence["filter_options"]["style_tribes"]
+    assert tool_evidence["items"][0]["verdict"] == "Reconsider"
+
+
 def test_synthesis_supports_reasoning_modes() -> None:
     evidence = {
         "evidence_type": "portfolio_summary",
@@ -165,6 +241,19 @@ def test_workspace_payload_supports_filters(tmp_path: Path) -> None:
     assert workspace["table_rows"][0]["genre_primary"] == "Drama"
     assert workspace["table_rows"][0]["budget_tier"] == "Standard"
     assert workspace["table_rows"][0]["emergent_trend"] == "Stable Demand"
+    assert workspace["portfolio_assets"][0]["asset_id"] == "script_000001"
+    assert workspace["portfolio_assets"][0]["asset_type"] == "script"
+    assert workspace["portfolio_assets"][0]["status"] == "rising"
+    assert workspace["portfolio_assets"][0]["narrative_atoms"][0]["atom_type"] == "genre"
+    assert workspace["clusters"][0]["label"]
+    assert workspace["clusters"][0]["color"].startswith("#")
+    assert "statuses" in workspace["filter_options"]
+
+    fading_payload = workspace_payload(data_dir=data_dir, filters={"status": "fading"}, limit=10)
+    fading_assets = fading_payload["streams"]["workspace"]["portfolio_assets"]
+    assert len(fading_assets) == 1
+    assert fading_assets[0]["asset_id"] == "script_000002"
+    assert all(asset["status"] == "fading" for asset in fading_assets)
 
 
 def test_accelerated_visuals_report_capabilities_without_rapids() -> None:
@@ -248,6 +337,19 @@ def test_operator_workspace_api_route(tmp_path: Path) -> None:
     omni_response = client.get("/omni-station/status")
     contract_response = client.get("/frontend-contract")
     health_response = client.get("/health")
+    public_config_response = client.get("/config/public")
+    model_adapters_response = client.get("/models/adapters")
+    model_preview_response = client.post(
+        "/models/preview-switch",
+        json={
+            "provider": "openai-compatible",
+            "model": "customer-hosted-reasoner",
+            "auth_mode": "customer_managed",
+            "purpose": "executive_brief",
+        },
+    )
+    readiness_response = client.get("/demo/readiness")
+    workflow_response = client.get("/demo/workflow-run")
     cors_response = client.options(
         "/interactive-workspace",
         headers={
@@ -262,15 +364,80 @@ def test_operator_workspace_api_route(tmp_path: Path) -> None:
     assert omni_response.status_code == 200
     assert contract_response.status_code == 200
     assert health_response.status_code == 200
+    assert public_config_response.status_code == 200
+    assert model_adapters_response.status_code == 200
+    assert model_preview_response.status_code == 200
+    assert readiness_response.status_code == 200
+    assert workflow_response.status_code == 200
     assert cors_response.status_code == 200
     assert "Operator Workspace" in response.text
     assert omni_response.json()["status"] == "connected"
     assert omni_response.json()["gpu_demo"]["demo_profile"] == "GPU/RAPIDS/NAT"
     assert contract_response.json()["consumers"] == ["Lovable Frontend", "Omni Station"]
     assert "market_signals" in contract_response.json()["routes"]
+    assert "knowledge_search" in contract_response.json()["routes"]
     assert "gpu_demo_status" in contract_response.json()["routes"]
+    assert "autonomous_intake" in contract_response.json()["routes"]
+    assert "insight_run_stream" in contract_response.json()["routes"]
+    assert "demo_readiness" in contract_response.json()["routes"]
+    assert "public_config" in contract_response.json()["routes"]
+    assert "model_adapters" in contract_response.json()["routes"]
+    assert "model_preview_switch" in contract_response.json()["routes"]
+    assert "demo_workflow_run" in contract_response.json()["routes"]
+    assert "/config/public" in omni_response.json()["routes"]
+    assert "/models/adapters" in omni_response.json()["routes"]
+    assert "/models/preview-switch" in omni_response.json()["routes"]
+    assert "/demo/readiness" in omni_response.json()["routes"]
+    assert "/demo/workflow-run" in omni_response.json()["routes"]
     assert health_response.json()["status"] == "ok"
     assert "gpu_demo" in health_response.json()
+    assert "ops" in health_response.json()
+    assert "nim" in health_response.json()["ops"]
+    assert "polars" in health_response.json()["ops"]
+    assert "graph" in health_response.json()["ops"]
+    assert "gpu" in health_response.json()["ops"]
+    public_config = public_config_response.json()
+    public_config_text = public_config_response.text
+    assert public_config["secrets_exposed"] is False
+    assert public_config["deployment"]["lovable_supported"] is True
+    assert public_config["deployment"]["ngrok_supported"] is True
+    assert "https://aura-intelligence-flow.lovable.app" in public_config["deployment"]["explicit_origins"]
+    assert "http://127.0.0.1:8081" in public_config["deployment"]["explicit_origins"]
+    assert "/demo/workflow-run" in public_config["api"]["public_routes"]
+    assert public_config["architecture_positioning"]["components"]["nat"]["foreground"] is True
+    assert public_config["architecture_positioning"]["components"]["nemotron"]["foreground"] is True
+    assert public_config["architecture_positioning"]["components"]["nemotron"]["aliases"] == {
+        "nano": "nvidia/nvidia-nemotron-nano-9b-v2"
+    }
+    assert public_config["reasoning"]["model_aliases"] == {
+        "nano": "nvidia/nvidia-nemotron-nano-9b-v2"
+    }
+    assert public_config["model_adapters"]["active_adapter"]["model"] == "nvidia/nvidia-nemotron-nano-9b-v2"
+    assert public_config["model_adapters"]["bring_your_own_model"]["preview_only"] is True
+    assert model_adapters_response.json()["active_adapter"]["runtime_locked"] is True
+    assert model_adapters_response.json()["bring_your_own_model"]["preview_only"] is True
+    assert model_preview_response.json()["preview_only"] is True
+    assert model_preview_response.json()["active_runtime_unchanged"] is True
+    assert model_preview_response.json()["current_active_model"] == "nvidia/nvidia-nemotron-nano-9b-v2"
+    assert model_preview_response.json()["requested_adapter"]["model"] == "customer-hosted-reasoner"
+    assert model_preview_response.json()["secrets_exposed"] is False
+    assert public_config["architecture_positioning"]["components"]["polars"]["foreground"] is False
+    assert public_config["architecture_positioning"]["components"]["rapids"]["foreground"] is False
+    assert "proprietary predictive models" in public_config["architecture_positioning"]["demo_boundary"]
+    assert "nvapi-" not in public_config_text
+    assert "NVIDIA_API_KEY" not in public_config_text
+    assert readiness_response.json()["status"] in {"ready", "degraded"}
+    assert readiness_response.json()["secrets_exposed"] is False
+    assert workflow_response.json()["status"] == "complete"
+    assert workflow_response.json()["secrets_exposed"] is False
+    assert workflow_response.json()["shared_asset_id"]
+    assert len(workflow_response.json()["timeline"]) >= 5
+    assert set(readiness_response.json()["phases"]) == {
+        "phase_1_operational_trust",
+        "phase_2_agentic_orchestration",
+        "phase_3_dynamic_knowledge",
+        "phase_4_dispatch_loop",
+    }
     assert cors_response.headers["access-control-allow-origin"] == "http://localhost:5173"
 
 
@@ -293,6 +460,11 @@ def test_persona_api_contracts() -> None:
         json={"signal_id": "spotify_00001", "limit": 2},
     )
     market_response = client.post("/market-signals", json={"limit": 3})
+    knowledge_response = client.post("/knowledge/search", json={"query": "Momentum", "limit": 3})
+    autonomous_response = client.get("/autonomous-intake/feed?limit=3")
+    stream_response = client.get("/insight-runs/stream?candidate_limit=2")
+    readiness_response = client.get("/demo/readiness")
+    workflow_response = client.get("/demo/workflow-run")
     dispatch_response = client.post(
         "/dispatch/executive-brief",
         json={
@@ -300,6 +472,9 @@ def test_persona_api_contracts() -> None:
             "reasoning_mode": "deterministic",
             "reasoning_model": "nano",
             "recipients": ["client@example.com"],
+            "template": "<h1>{{brand_name}}</h1><p>{{headline}}</p><ul><li>{{bullet_one}}</li><li>{{bullet_two}}</li><li>{{bullet_three}}</li></ul>",
+            "output_formats": ["html", "pdf", "slides"],
+            "auto_verify": True,
             "white_label": {"brand_name": "Aura Intelligence", "theme": {}},
         },
     )
@@ -312,13 +487,51 @@ def test_persona_api_contracts() -> None:
     assert workspace_response.status_code == 200
     assert "workspace" in workspace_response.json()["result"]["streams"]
     assert workspace_response.json()["result"]["streams"]["workspace"]["filters"]["budget_tier"] == "Premium"
+    assert "table_rows" in workspace_response.json()["result"]["streams"]["workspace"]
+    assert "portfolio_assets" in workspace_response.json()["result"]["streams"]["workspace"]
+    if workspace_response.json()["result"]["streams"]["workspace"]["portfolio_assets"]:
+        asset = workspace_response.json()["result"]["streams"]["workspace"]["portfolio_assets"][0]
+        assert asset["status"] in {"rising", "peaking", "fading"}
+        assert asset["narrative_atoms"]
     assert network_response.status_code == 200
     assert market_response.status_code == 200
+    assert knowledge_response.status_code == 200
+    assert autonomous_response.status_code == 200
+    assert stream_response.status_code == 200
+    assert readiness_response.status_code == 200
+    assert workflow_response.status_code == 200
     assert dispatch_response.status_code == 200
     assert tools_response.status_code == 200
     assert network_response.json()["result"]["evidence_type"] == "cultural_signal_network"
     assert market_response.json()["result"]["evidence_type"] == "market_signal_snapshot"
+    assert knowledge_response.json()["result"]["evidence_type"] == "living_knowledge_search"
+    assert "items" in knowledge_response.json()["result"]
+    assert len(brief_response.json()["result"]["reasoning_trace"]) >= 5
+    assert brief_response.json()["result"]["memory_matches"]
+    assert autonomous_response.json()["feed_type"] == "autonomous_intake"
+    assert len(autonomous_response.json()["items"]) == 3
+    assert "event: trace" in stream_response.text
+    assert "event: result" in stream_response.text
+    assert readiness_response.json()["phases"]["phase_4_dispatch_loop"]["ready"] is True
+    assert readiness_response.json()["phases"]["phase_4_dispatch_loop"]["dispatch_status"] == "sent"
+    workflow = workflow_response.json()
+    assert workflow["mode"] == "autonomous_workflow_simulation"
+    assert workflow["architecture_positioning"]["primary_story"].startswith("NAT-orchestrated")
+    assert workflow["architecture_positioning"]["components"]["client_models"]["foreground"] is False
+    assert workflow["shared_asset_id"] == workflow["shared_insight_package"]["asset_id"]
+    assert workflow["intake"]["asset"]["script_id"] == workflow["shared_asset_id"]
+    assert workflow["surfaces"]["executive_email"]["status"] == "sent"
+    assert workflow["surfaces"]["operator_workspace"]["status"] == "published"
+    assert workflow["surfaces"]["communication_lab"]["status"] == "auto_verified"
+    assert workflow["shared_insight_package"]["reasoning_trace"]
+    assert workflow["shared_insight_package"]["memory_matches"]
     assert dispatch_response.json()["result"]["dispatch_ready"] is True
+    assert dispatch_response.json()["result"]["dispatch_status"] == "sent"
+    assert dispatch_response.json()["result"]["auto_verified"] is True
+    assert "Aura Intelligence" in dispatch_response.json()["result"]["html_body"]
+    assert dispatch_response.json()["result"]["rendered_template"]
+    assert {artifact["format"] for artifact in dispatch_response.json()["result"]["generated_artifacts"]} == {"html", "pdf", "slides"}
+    assert dispatch_response.json()["result"]["source_brief"]["reasoning_trace"]
     assert len(dispatch_response.json()["result"]["bullets"]) == 3
     assert dispatch_response.json()["result"]["recipients"] == ["client@example.com"]
     assert "Greenlight Brief" in dispatch_response.json()["result"]["subject"]
