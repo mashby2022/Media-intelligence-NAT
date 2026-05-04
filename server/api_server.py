@@ -10,6 +10,26 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
+
+def _load_backend_env() -> None:
+    """Load simple KEY=VALUE backend env files without adding a dependency."""
+
+    for env_path in (Path(".env"), Path(".env.local")):
+        if not env_path.exists():
+            continue
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            if not key or key in os.environ:
+                continue
+            os.environ[key] = value.strip().strip("'\"")
+
+
+_load_backend_env()
+
 from agent.tools import TOOL_DEFINITIONS, analyze_cultural_signal_network, get_market_signal_evidence, get_portfolio_evidence, synthesize_evidence
 from agent.reasoning import chat_with_nim, nim_key_available
 from engine.analytics import graph_engine_capabilities
@@ -36,8 +56,11 @@ from server.models import (
 DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
+    "http://localhost:8080",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
+    "http://127.0.0.1:8080",
+    "https://aura-intelligence-flow.lovable.app",
 ]
 DEFAULT_CORS_ORIGIN_REGEX = r"^https://([a-zA-Z0-9-]+\.)*(lovable\.app|lovableproject\.com)$"
 

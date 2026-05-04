@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Filter, Search, Sparkles, Sliders, Mail, FileCode2, Eye,
   BookMarked, FolderOpen, Boxes, Music2, Headphones, Layers,
+  RefreshCw,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { mieClient, type MarketSignal, type NetworkResult, type WorkspaceResult, type WorkspaceRow } from "@/lib/mieClient";
 
 /* ============================================================
  * Operator Studio — high-density companion to the Forecast view
@@ -47,6 +49,32 @@ const TABS = [
   { id: "template",     label: "Template Architect",     Icon: FileCode2 },
 ] as const;
 type Tab = typeof TABS[number]["id"];
+
+const formatCompact = (value: number | undefined) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return "—";
+  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+};
+
+const formatScore = (value: number | undefined, digits = 2) =>
+  typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
+
+const statusFromRow = (row: WorkspaceRow): Atom["status"] => {
+  if (row.risk_category === "HIGH" || row.risk_category === "ELEVATED") return "fading";
+  if (row.viability_score >= 0.85 || row.emergent_trend === "Momentum Breakout") return "rising";
+  return "peaking";
+};
+
+const atomFromWorkspaceRow = (row: WorkspaceRow): Atom => ({
+  id: row.script_id,
+  atom: row.title,
+  collective: `${row.genre_primary} · ${row.platform_fit}`,
+  velocity: Math.max(0, row.viability_score * 5),
+  resonance: row.completion_prediction - (row.cultural_risk_score ?? 0),
+  reach: row.market || row.target_demo,
+  spotify: Array.from({ length: 12 }, (_, i) => Math.max(1, Math.round((row.music_momentum_score ?? row.viability_score) * 18 + i / 2))),
+  podcast: Array.from({ length: 12 }, (_, i) => Math.max(1, Math.round(row.completion_prediction * 16 + i / 3))),
+  status: statusFromRow(row),
+});
 
 /* ====================== Main view ======================== */
 
@@ -108,13 +136,65 @@ export const MarketAnatomy = () => {
 const AtomicAnatomy = () => {
   const [filter, setFilter] = useState("All Atoms");
   const [query, setQuery] = useState("");
+  const [workspace, setWorkspace] = useState<WorkspaceResult["result"] | null>(null);
+  const [marketSignals, setMarketSignals] = useState<MarketSignal[]>([]);
+  const [network, setNetwork] = useState<NetworkResult["result"] | null>(null);
+  const [loadingBackend, setLoadingBackend] = useState(false);
+  const [backendError, setBackendError] = useState<string | null>(null);
+
+  const loadBackend = async () => {
+    setLoadingBackend(true);
+    setBackendError(null);
+    try {
+      const [workspacePayload, marketPayload, networkPayload] = await Promise.all([
+        mieClient.workspace({}, 50),
+        mieClient.marketSignals(6),
+        mieClient.network("spotify_00001", 6),
+      ]);
+      setWorkspace(workspacePayload.result);
+      setMarketSignals(marketPayload.result.top_signals || []);
+      setNetwork(networkPayload.result);
+    } catch (error) {
+      setBackendError(error instanceof Error ? error.message : "Backend unavailable");
+    } finally {
+      setLoadingBackend(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadBackend();
+  }, []);
+
+  const workspaceRows = workspace?.streams?.workspace?.table_rows || [];
+  const kpis = workspace?.streams?.workspace?.kpis;
+  const graphSummary = workspace?.streams?.graph?.summary;
+  const liveAtoms = workspaceRows.map(atomFromWorkspaceRow);
+  const sourceAtoms = liveAtoms.length ? liveAtoms : ATOMS;
 
   const rows = useMemo(() =>
-    ATOMS.filter((a) => {
+    sourceAtoms.filter((a) => {
       const f = filter === "All Atoms" || a.status === filter.toLowerCase();
       const q = a.atom.toLowerCase().includes(query.toLowerCase()) || a.collective.toLowerCase().includes(query.toLowerCase());
       return f && q;
-    }), [filter, query]);
+    }), [filter, query, sourceAtoms]);
+
+  const statCards = [
+    {
+      k: "Records Indexed",
+      v: formatCompact(kpis?.records),
+      note: `${formatCompact(kpis?.high_viability_records)} high-viability candidates`,
+    },
+    {
+      k: "Portfolio Viability",
+      v: formatScore(kpis?.avg_viability),
+      note: `completion ${formatScore(kpis?.avg_completion_prediction)} · risk ${formatScore(kpis?.avg_cultural_risk)}`,
+    },
+    {
+      k: "Signal Network",
+      v: formatCompact(network?.summary?.connected_scripts ?? graphSummary?.unique_scripts),
+      note: `${formatCompact(network?.summary?.related_signals ?? graphSummary?.unique_signals)} related signals`,
+    },
+  ];
 
   return (
     <div className="grid lg:grid-cols-[1.55fr_1fr] gap-6 fade-up">
@@ -123,9 +203,19 @@ const AtomicAnatomy = () => {
         <div className="flex items-center justify-between px-6 py-3 border-b border-border/60">
           <div className="flex items-center gap-2">
             <Boxes className="h-3.5 w-3.5 text-amethyst" />
-            <span className="text-[10px] tracking-couture uppercase text-amethyst">Interactive Map · Leiden 3D Cluster</span>
+            <span className="text-[10px] tracking-couture uppercase text-amethyst">
+              Interactive Map · Backend Signal spotify_00001
+            </span>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={() => void loadBackend()}
+              disabled={loadingBackend}
+              className="inline-flex items-center gap-1.5 text-[10px] tracking-couture uppercase px-3 py-1.5 rounded-full bg-white/70 text-amethyst hover:text-obsidian transition-colors disabled:opacity-60"
+            >
+              <RefreshCw className={`h-3 w-3 ${loadingBackend ? "animate-spin" : ""}`} />
+              Sync
+            </button>
             {["Rotate", "Zoom", "Cluster"].map((m, i) => (
               <button key={m} className={`text-[10px] tracking-couture uppercase px-3 py-1.5 rounded-full transition-colors
                 ${i===2 ? "bg-gradient-amethyst text-white" : "bg-secondary text-foreground/60 hover:text-obsidian"}`}>{m}</button>
@@ -135,23 +225,23 @@ const AtomicAnatomy = () => {
         <div className="relative h-[440px] bg-gradient-iridescent overflow-hidden">
           <Leiden3DGraph />
           <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-[10px] tracking-couture uppercase text-obsidian/60">
-            <span>11 clusters · 1,284 nodes · Leiden modularity 0.71</span>
-            <span className="text-amethyst">render: 18ms · GPU</span>
+            <span>
+              {formatCompact(graphSummary?.edges)} edges · {formatCompact(graphSummary?.unique_scripts)} scripts · {marketSignals.length || 6} market signals
+            </span>
+            <span className="text-amethyst">
+              {backendError ? "fallback data" : workspace ? "live backend" : "syncing"}
+            </span>
           </div>
         </div>
       </div>
 
       {/* Side stat cards */}
       <div className="grid gap-5">
-        {[
-          { k: "Cluster Modularity",   v: "0.71", note: "Leiden — well-separated"        },
-          { k: "Cross-Cluster Flow",   v: "3.4×", note: "Etherealists → Visionaries"    },
-          { k: "Counter-Signal Watch", v: "07",   note: "atoms to monitor this week"    },
-        ].map((s) => (
+        {statCards.map((s) => (
           <div key={s.k} className="rounded-2xl border-iridescent bg-white/80 p-5 shadow-soft">
             <div className="flex items-center justify-between text-[10px] tracking-couture uppercase">
               <span className="text-muted-foreground">{s.k}</span>
-              <span className="text-amethyst">live</span>
+              <span className="text-amethyst">{workspace ? "live" : "local"}</span>
             </div>
             <div className="font-serif text-4xl text-obsidian mt-2">{s.v}</div>
             <div className="text-xs text-muted-foreground mt-1">{s.note}</div>
@@ -164,7 +254,12 @@ const AtomicAnatomy = () => {
         <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-5 border-b border-border/60">
           <div>
             <div className="text-[10px] tracking-couture uppercase text-amethyst">Atomic Anatomy</div>
-            <h3 className="font-serif text-2xl text-obsidian">Narrative Atoms · <span className="italic text-muted-foreground">Polars-optimized query</span></h3>
+            <h3 className="font-serif text-2xl text-obsidian">
+              Narrative Atoms · <span className="italic text-muted-foreground">Polars-optimized query</span>
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              {backendError ? "Backend fallback active. Start the API and sync again." : workspace ? "Hydrated from /interactive-workspace." : "Connecting to backend workspace."}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
@@ -226,8 +321,24 @@ const AtomicAnatomy = () => {
 
         <div className="px-6 py-3 border-t border-border/60 flex items-center justify-between text-[10px] tracking-couture uppercase text-muted-foreground">
           <span className="font-data normal-case tracking-normal">polars.scan_parquet("atoms.parquet").filter(...).collect()</span>
-          <span className="text-amethyst">{rows.length} rows · 0.8ms</span>
+          <span className="text-amethyst">{rows.length} rows · {workspace ? "backend" : "local"} </span>
         </div>
+      </div>
+
+      <div className="lg:col-span-2 grid lg:grid-cols-3 gap-5">
+        {marketSignals.slice(0, 3).map((signal) => (
+          <article key={signal.signal_id} className="rounded-2xl border-iridescent bg-white/80 p-5 shadow-soft">
+            <div className="text-[10px] tracking-couture uppercase text-amethyst">{signal.signal_category.replace(/_/g, " ")}</div>
+            <h4 className="font-serif text-xl text-obsidian mt-1 truncate">{signal.signal_name}</h4>
+            <div className="mt-3 flex items-end justify-between gap-3">
+              <div className="font-data text-2xl text-obsidian">{formatScore(signal.signal_strength, 2)}</div>
+              <div className="text-right text-[10px] tracking-couture uppercase text-muted-foreground">
+                {signal.primary_metric_name || "metric"}
+                <div className="font-data normal-case tracking-normal text-amethyst">{formatCompact(signal.primary_metric)}</div>
+              </div>
+            </div>
+          </article>
+        ))}
       </div>
     </div>
   );

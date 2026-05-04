@@ -10,10 +10,22 @@ http://127.0.0.1:8000
 
 If the Lovable preview is cloud-hosted, expose the local backend with a public tunnel such as ngrok and use the HTTPS tunnel URL as the base URL.
 
+Current hosted Lovable app:
+
+```text
+https://aura-intelligence-flow.lovable.app
+```
+
+Current backend tunnel to set in Lovable:
+
+```text
+https://flatterer-imitation-figurine.ngrok-free.dev
+```
+
 For hosted Lovable preview domains, add the preview origin to CORS:
 
 ```bash
-MIE_CORS_ORIGINS="https://your-lovable-preview.example" python -m uvicorn server.api_server:app --host 127.0.0.1 --port 8000
+MIE_CORS_ORIGINS="https://aura-intelligence-flow.lovable.app" python -m uvicorn server.api_server:app --host 127.0.0.1 --port 8000
 ```
 
 ## Discovery Endpoints

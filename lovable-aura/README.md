@@ -7,13 +7,13 @@ This frontend is mapped to the Media Intelligence Engine backend.
 Set these in Lovable/Vite:
 
 ```bash
-VITE_MIE_API_BASE_URL=http://127.0.0.1:8000
+VITE_MIE_API_BASE_URL=https://flatterer-imitation-figurine.ngrok-free.dev
 VITE_MIE_BRAND_NAME=Aura Intelligence
 VITE_MIE_REASONING_MODE=auto
 VITE_MIE_REASONING_MODEL=nano
 ```
 
-If your backend runs on Brev/ngrok, use that HTTPS URL in `VITE_MIE_API_BASE_URL`.
+For the hosted Lovable app at `https://aura-intelligence-flow.lovable.app`, set `VITE_MIE_API_BASE_URL` to the active HTTPS ngrok URL for the FastAPI backend.
 
 ## Backend Routes Used
 
@@ -45,7 +45,7 @@ If your backend runs on Brev/ngrok, use that HTTPS URL in `VITE_MIE_API_BASE_URL
 If Lovable preview uses a hosted domain, backend must allow it:
 
 ```bash
-MIE_CORS_ORIGINS="https://your-preview-domain" python -m uvicorn server.api_server:app --host 127.0.0.1 --port 8000
+MIE_CORS_ORIGINS="https://aura-intelligence-flow.lovable.app" python -m uvicorn server.api_server:app --host 127.0.0.1 --port 8000
 ```
 
 ## Quick Validation

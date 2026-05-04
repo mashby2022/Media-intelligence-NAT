@@ -1,5 +1,86 @@
 export type ReasoningMode = "auto" | "deterministic" | "nim";
 export type ReasoningModel = "nano" | "super";
+export type WorkspaceFilters = {
+  genre?: string;
+  platform?: string;
+  demo?: string;
+  market?: string;
+  risk_category?: string;
+  budget_tier?: string;
+  emergent_trend?: string;
+  min_viability?: number;
+  max_risk?: number;
+};
+
+export type WorkspaceRow = {
+  script_id: string;
+  title: string;
+  genre_primary: string;
+  platform_fit: string;
+  target_demo: string;
+  market?: string;
+  budget_tier?: string;
+  emergent_trend?: string;
+  viability_score: number;
+  completion_prediction: number;
+  cultural_risk_score?: number;
+  risk_category: string;
+  music_momentum_score?: number;
+  structural_boost_score?: number;
+  structural_vulnerability_score?: number;
+};
+
+export type WorkspaceResult = {
+  result: {
+    accelerated_visuals?: {
+      capabilities?: { compute_source?: string; available?: boolean; packages?: Record<string, boolean> };
+    };
+    streams?: {
+      workspace?: {
+        kpis?: {
+          records?: number;
+          avg_viability?: number;
+          avg_completion_prediction?: number;
+          avg_cultural_risk?: number;
+          high_viability_records?: number;
+        };
+        filter_options?: Record<string, string[]>;
+        scatter_points?: WorkspaceRow[];
+        table_rows?: WorkspaceRow[];
+      };
+      graph?: {
+        summary?: { edges?: number; unique_scripts?: number; unique_signals?: number };
+        edge_counts?: Array<{ signal_type?: string; edges?: number }>;
+      };
+    };
+  };
+};
+
+export type MarketSignal = {
+  signal_id: string;
+  signal_name: string;
+  signal_category: string;
+  rank?: number;
+  signal_strength?: number;
+  primary_metric?: number;
+  primary_metric_name?: string;
+};
+
+export type NetworkResult = {
+  result: {
+    signal_id: string;
+    summary?: {
+      connected_scripts?: number;
+      avg_viability?: number;
+      avg_cultural_risk?: number;
+      structural_boost_index?: number;
+      structural_vulnerability_index?: number;
+      related_signals?: number;
+    };
+    boosted_scripts?: WorkspaceRow[];
+    vulnerable_scripts?: WorkspaceRow[];
+  };
+};
 
 function normalizeApiBaseUrl(raw: string | undefined): string {
   const fallback = "http://127.0.0.1:8000";
@@ -12,6 +93,14 @@ const API_BASE = normalizeApiBaseUrl(import.meta.env.VITE_MIE_API_BASE_URL);
 const BRAND = import.meta.env.VITE_MIE_BRAND_NAME || "Aura Intelligence";
 const REASONING_MODE = (import.meta.env.VITE_MIE_REASONING_MODE || "auto") as ReasoningMode;
 const REASONING_MODEL = (import.meta.env.VITE_MIE_REASONING_MODEL || "nano") as ReasoningModel;
+const IS_NGROK_BACKEND = API_BASE.includes(".ngrok-free.");
+
+function requestHeaders(extra: Record<string, string> = {}): HeadersInit {
+  return {
+    ...(IS_NGROK_BACKEND ? { "ngrok-skip-browser-warning": "true" } : {}),
+    ...extra,
+  };
+}
 
 async function parseJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -22,14 +111,16 @@ async function parseJson<T>(response: Response): Promise<T> {
 }
 
 async function get<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`);
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: requestHeaders(),
+  });
   return parseJson<T>(response);
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: requestHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
   return parseJson<T>(response);
@@ -90,6 +181,30 @@ export const mieClient = {
       messages,
       reasoning_mode: REASONING_MODE,
       reasoning_model: REASONING_MODEL,
+      white_label: { brand_name: BRAND, theme: {} },
+    }),
+  workspace: (filters: WorkspaceFilters = {}, limit = 250) =>
+    post<WorkspaceResult>("/interactive-workspace", {
+      limit,
+      filters,
+      white_label: { brand_name: BRAND, theme: {} },
+    }),
+  network: (signalId: string, limit = 10) =>
+    post<NetworkResult>("/network-graph/analyze", {
+      signal_id: signalId,
+      limit,
+      white_label: { brand_name: BRAND, theme: {} },
+    }),
+  marketSignals: (limit = 10) =>
+    post<{
+      result: {
+        summary?: { signals?: number };
+        category_counts?: Array<{ signal_category?: string; signals?: number; avg_signal_strength?: number }>;
+        top_signals?: MarketSignal[];
+        benchmark?: { latency_ms?: number; compute_source?: string };
+      };
+    }>("/market-signals", {
+      limit,
       white_label: { brand_name: BRAND, theme: {} },
     }),
 };
