@@ -15,8 +15,17 @@ NIM_BASE_URL = os.getenv("NIM_BASE_URL", "https://integrate.api.nvidia.com/v1").
 DEFAULT_MODEL_ALIAS = "nano"
 DEFAULT_MODELS = {
     "nano": os.getenv("NEMOTRON_NANO_MODEL", "nvidia/nvidia-nemotron-nano-9b-v2"),
-    "super": os.getenv("NEMOTRON_SUPER_MODEL", "nvidia/nemotron-3-super-120b-a12b"),
 }
+
+
+def _float_env(name: str, fallback: float) -> float:
+    try:
+        return float(os.getenv(name, str(fallback)))
+    except ValueError:
+        return fallback
+
+
+NIM_TIMEOUT_SEC = _float_env("MIE_NIM_TIMEOUT_SEC", 25.0)
 
 
 def nim_key_available() -> bool:
@@ -68,7 +77,8 @@ def _system_prompt_for_role(role: str) -> str:
 def _miranda_system_prompt() -> str:
     return (
         "You are Miranda, the executive media-intelligence orchestrator. "
-        "Respond with concise, direct markdown. Prefer short paragraphs and bullet lists. "
+        "The demo audience is a Head of Scripted deciding what to greenlight next. "
+        "Respond with concise, direct markdown in this order when possible: Recommendation, Top bets, Evidence, Risk, Next action. "
         "Avoid filler. Ground recommendations in observable signals and uncertainty when needed."
     )
 
@@ -78,7 +88,7 @@ def synthesize_with_nim(
     evidence: dict[str, Any],
     role: str,
     model_alias: str = DEFAULT_MODEL_ALIAS,
-    timeout_sec: float = 25.0,
+    timeout_sec: float | None = None,
 ) -> dict[str, Any]:
     """Attempt NIM reasoning synthesis and return persona-agnostic metadata."""
 
@@ -87,6 +97,7 @@ def synthesize_with_nim(
         return {"ok": False, "error": "missing_nim_key"}
 
     model_name = _resolve_model_name(model_alias)
+    request_timeout = timeout_sec if timeout_sec is not None else NIM_TIMEOUT_SEC
     payload = {
         "model": model_name,
         "messages": [
@@ -117,7 +128,7 @@ def synthesize_with_nim(
     )
     started = perf_counter()
     try:
-        with urlrequest.urlopen(req, timeout=timeout_sec) as response:
+        with urlrequest.urlopen(req, timeout=request_timeout) as response:
             raw = response.read().decode("utf-8")
     except (urlerror.HTTPError, urlerror.URLError, TimeoutError) as exc:
         return {
@@ -125,6 +136,7 @@ def synthesize_with_nim(
             "error": "nim_request_failed",
             "details": str(exc),
             "model": model_name,
+            "timeout_sec": request_timeout,
         }
 
     latency_ms = round((perf_counter() - started) * 1000, 2)
@@ -163,7 +175,7 @@ def chat_with_nim(
     *,
     messages: list[dict[str, str]],
     model_alias: str = DEFAULT_MODEL_ALIAS,
-    timeout_sec: float = 25.0,
+    timeout_sec: float | None = None,
 ) -> dict[str, Any]:
     """Run a direct NIM chat completion for Miranda-style conversation."""
 
@@ -172,6 +184,7 @@ def chat_with_nim(
         return {"ok": False, "error": "missing_nim_key"}
 
     model_name = _resolve_model_name(model_alias)
+    request_timeout = timeout_sec if timeout_sec is not None else NIM_TIMEOUT_SEC
     chat_messages: list[dict[str, str]] = [{"role": "system", "content": _miranda_system_prompt()}]
     for message in messages:
         role = str(message.get("role", "")).strip()
@@ -202,7 +215,7 @@ def chat_with_nim(
     )
     started = perf_counter()
     try:
-        with urlrequest.urlopen(req, timeout=timeout_sec) as response:
+        with urlrequest.urlopen(req, timeout=request_timeout) as response:
             raw = response.read().decode("utf-8")
     except (urlerror.HTTPError, urlerror.URLError, TimeoutError) as exc:
         return {
@@ -210,6 +223,7 @@ def chat_with_nim(
             "error": "nim_request_failed",
             "details": str(exc),
             "model": model_name,
+            "timeout_sec": request_timeout,
         }
 
     latency_ms = round((perf_counter() - started) * 1000, 2)

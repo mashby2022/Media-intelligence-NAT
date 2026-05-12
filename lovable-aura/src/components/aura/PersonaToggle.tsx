@@ -8,7 +8,7 @@ interface Props {
 }
 
 export const personaForPath = (pathname: string): Persona =>
-  pathname.startsWith("/operator") ? "operator" : "executive";
+  pathname.startsWith("/operator") || pathname.startsWith("/demo") ? "operator" : "executive";
 
 export const defaultPathForPersona = (p: Persona): string =>
   p === "operator" ? "/operator" : "/";

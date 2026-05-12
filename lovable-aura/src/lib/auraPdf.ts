@@ -221,7 +221,7 @@ async function buildMemo(data: AuraBriefData): Promise<Uint8Array> {
   page.drawText(editionLine, {
     x: width - margin - elW, y: footerY + 10, size: 7.5, font: sans, color: C.muted,
   });
-  const tech = "AURA INTELLIGENCE · POLARS HIGH-PERFORMANCE ENGINE · NEMO-3-NANO";
+  const tech = "AURA INTELLIGENCE · NAT ORCHESTRATION · NEMOTRON NANO · POLARS/RAPIDS READY";
   page.drawText(tech, { x: margin, y: footerY - 6, size: 6.5, font: sans, color: C.muted });
 
   return pdf.save();
@@ -261,7 +261,7 @@ async function buildSlidePack(data: AuraBriefData): Promise<Uint8Array> {
     page.drawLine({ start: { x: 56, y: 40 }, end: { x: SLIDE_W - 56, y: 40 }, thickness: 0.4, color: C.rule });
     page.drawText("CURATED FOR " + data.recipient.toUpperCase(),
       { x: 56, y: 24, size: 7, font: sansBold, color: C.muted });
-    const right = "POLARS · NEMO-3-NANO · 0.02ms";
+    const right = "NAT · NEMOTRON NANO · POLARS/RAPIDS READY";
     const w = sans.widthOfTextAtSize(right, 7);
     page.drawText(right, { x: SLIDE_W - 56 - w, y: 24, size: 7, font: sans, color: C.muted });
   };
@@ -348,8 +348,8 @@ async function buildSlidePack(data: AuraBriefData): Promise<Uint8Array> {
     drawIridescentBar(p, 0, 0, SLIDE_W, 6);
     p.drawText("AURA INTELLIGENCE", { x: 56, y: SLIDE_H - 60, size: 10, font: sansBold, color: C.amethystSoft });
     p.drawText("Thank you.", { x: 56, y: SLIDE_H / 2 + 10, size: 96, font: serif, color: C.white });
-    p.drawText("A luxurious second opinion,", { x: 56, y: SLIDE_H / 2 - 60, size: 16, font: serifIt, color: C.amethystSoft });
-    p.drawText("distilled from eleven million signals.", { x: 56, y: SLIDE_H / 2 - 84, size: 16, font: serifIt, color: C.amethystSoft });
+    p.drawText("Agentic briefing workflow,", { x: 56, y: SLIDE_H / 2 - 60, size: 16, font: serifIt, color: C.amethystSoft });
+    p.drawText("grounded in auditable portfolio evidence.", { x: 56, y: SLIDE_H / 2 - 84, size: 16, font: serifIt, color: C.amethystSoft });
     p.drawText("CURATED FOR " + data.recipient.toUpperCase(), { x: 56, y: 56, size: 8, font: sansBold, color: C.amethystSoft });
   }
 

@@ -7,6 +7,7 @@ import AuraLayout from "./pages/AuraLayout.tsx";
 import IntelligencePage from "./pages/IntelligencePage.tsx";
 import CommunicationPage from "./pages/CommunicationPage.tsx";
 import OperatorPage from "./pages/OperatorPage.tsx";
+import DemoPage from "./pages/DemoPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const App = () => (
             <Route path="/" element={<IntelligencePage />} />
             <Route path="/communication" element={<CommunicationPage />} />
             <Route path="/operator" element={<OperatorPage />} />
+            <Route path="/demo" element={<DemoPage />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
