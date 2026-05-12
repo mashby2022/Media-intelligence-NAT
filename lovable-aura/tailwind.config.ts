@@ -31,6 +31,11 @@ export default {
           DEFAULT: "hsl(var(--amethyst))",
           soft: "hsl(var(--amethyst-soft))",
         },
+        mint: {
+          DEFAULT: "hsl(var(--mint))",
+          deep: "hsl(var(--mint-deep))",
+          soft: "hsl(var(--mint-soft))",
+        },
         sky: {
           pale: "hsl(var(--sky))",
           deep: "hsl(var(--sky-deep))",
@@ -77,7 +82,7 @@ export default {
         },
       },
       fontFamily: {
-        serif: ['"Playfair Display"', 'Georgia', 'serif'],
+        serif: ['Inter', 'system-ui', 'sans-serif'],
         sans: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },

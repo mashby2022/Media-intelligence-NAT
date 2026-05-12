@@ -250,6 +250,27 @@ export type PublicConfigResult = {
   secrets_exposed?: boolean;
 };
 
+export type DatasetInventoryItem = {
+  dataset_id: string;
+  name: string;
+  filename: string;
+  format: string;
+  size_bytes: number;
+  rows?: number;
+  columns?: string[];
+  column_count?: number;
+  download_formats: string[];
+  downloads: Record<string, string>;
+  metadata_error?: string;
+};
+
+export type DatasetInventoryResult = {
+  data_dir: string;
+  count: number;
+  items: DatasetInventoryItem[];
+  secrets_exposed: boolean;
+};
+
 export type ModelAdaptersResult = {
   active_adapter?: {
     adapter_id?: string;
@@ -384,6 +405,7 @@ function normalizeApiBaseUrl(raw: string | undefined): string {
 
 const API_BASE = normalizeApiBaseUrl(import.meta.env.VITE_MIE_API_BASE_URL);
 const BRAND = import.meta.env.VITE_MIE_BRAND_NAME || "Aura Intelligence";
+const CUSTOMER_NAME = import.meta.env.VITE_MIE_CUSTOMER_NAME || "Customer Studio";
 const REASONING_MODE = (import.meta.env.VITE_MIE_REASONING_MODE || "auto") as ReasoningMode;
 const REASONING_MODEL: ReasoningModel = "nano";
 const IS_NGROK_BACKEND = API_BASE.includes(".ngrok-free.");
@@ -423,6 +445,7 @@ export const mieClient = {
   config: {
     apiBase: API_BASE,
     brand: BRAND,
+    customerName: CUSTOMER_NAME,
     reasoningMode: REASONING_MODE,
     reasoningModel: REASONING_MODEL,
   },
@@ -438,6 +461,9 @@ export const mieClient = {
     }),
   demoReadiness: () => get<DemoReadinessResult>("/demo/readiness"),
   demoWorkflowRun: () => get<DemoWorkflowRunResult>("/demo/workflow-run"),
+  datasets: () => get<DatasetInventoryResult>("/datasets"),
+  datasetDownloadUrl: (datasetId: string, format: string) =>
+    `${API_BASE}/datasets/${encodeURIComponent(datasetId)}/download?format=${encodeURIComponent(format)}`,
   frontendContract: () => get<{ routes?: Record<string, unknown> }>("/frontend-contract"),
   orchestratorTools: () => get<{ liaison_core?: { tools?: unknown[] } }>("/orchestrator/tools"),
   generateBrief: (candidateLimit = 5) =>

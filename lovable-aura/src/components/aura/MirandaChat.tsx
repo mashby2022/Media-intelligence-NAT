@@ -7,15 +7,15 @@ import { mieClient } from "@/lib/mieClient";
 type Msg = { role: "user" | "assistant"; content: string; ts: number };
 
 const SUGGESTIONS = [
-  "Read my Resort 2027 treatment.",
-  "Which TasteCollective is rising fastest?",
-  "Three counter-signals to watch this week.",
+  "What genres and subcultures should we bet on in the next 6-12 months?",
+  "Which emerging audience markets are underserved?",
+  "What should we avoid greenlighting right now?",
 ];
 
 const GREETING: Msg = {
   role: "assistant",
   content:
-    "**Miranda here.**\n\nHand me a treatment, a logline, or a half-formed idea — I'll return an Aura Brief grounded in auditable portfolio evidence. Or simply ask.",
+    "**Miranda here.**\n\nFor this executive demo, ask me the greenlight question. I will answer in executive brief format: recommendation, top bets, evidence, risk, and next action.",
   ts: Date.now(),
 };
 
@@ -58,13 +58,13 @@ export const MirandaChat = () => {
   };
 
   return (
-    <article className="rounded-2xl border-iridescent bg-white/80 shadow-ethereal overflow-hidden flex flex-col h-[640px]">
+    <article className="rounded-2xl border-iridescent bg-white/80 shadow-ethereal overflow-hidden flex flex-col h-[560px]">
       {/* Header */}
       <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between bg-gradient-iridescent/30">
         <div className="flex items-center gap-3">
-          <div className="relative h-10 w-10 rounded-full bg-gradient-amethyst flex items-center justify-center shadow-halo">
+          <div className="relative h-10 w-10 rounded-full bg-gradient-aura flex items-center justify-center shadow-halo">
             <Sparkles className="h-4 w-4 text-white" strokeWidth={1.5} />
-            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-amethyst halo-pulse ring-2 ring-white" />
+            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-mint-deep halo-pulse ring-2 ring-white" />
           </div>
           <div className="leading-tight">
             <div className="font-serif text-lg text-obsidian">
@@ -81,11 +81,11 @@ export const MirandaChat = () => {
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6 space-y-5 bg-lavender/20">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6 space-y-5 bg-gradient-mint">
         {messages.map((m, i) => (
           <div key={i} className={`flex gap-3 fade-up ${m.role === "user" ? "justify-end" : ""}`}>
             {m.role === "assistant" && (
-              <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-amethyst text-white flex items-center justify-center font-serif text-sm">
+              <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-aura text-white flex items-center justify-center font-serif text-sm">
                 M
               </div>
             )}
@@ -93,7 +93,7 @@ export const MirandaChat = () => {
               <div
                 className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-soft
                   ${m.role === "user"
-                    ? "bg-gradient-amethyst text-white rounded-tr-sm"
+                    ? "bg-gradient-aura text-white rounded-tr-sm"
                     : "bg-white border-iridescent text-obsidian rounded-tl-sm"}`}
               >
                 {m.role === "assistant" ? (
@@ -110,7 +110,7 @@ export const MirandaChat = () => {
                     <ReactMarkdown>{m.content}</ReactMarkdown>
                   </div>
                 ) : (
-                  <p className="whitespace-pre-wrap font-serif italic">{m.content}</p>
+                  <p className="whitespace-pre-wrap font-sans">{m.content}</p>
                 )}
               </div>
               <div className={`mt-1 px-1 flex items-center gap-1.5 text-[9px] tracking-couture uppercase text-muted-foreground/70 font-mono normal-case tracking-normal
@@ -129,7 +129,7 @@ export const MirandaChat = () => {
         ))}
         {loading && (
           <div className="flex gap-3 fade-up">
-            <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-amethyst text-white flex items-center justify-center font-serif text-sm">M</div>
+            <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-aura text-white flex items-center justify-center font-serif text-sm">M</div>
             <div className="rounded-2xl rounded-tl-sm px-4 py-3 bg-white border-iridescent shadow-soft inline-flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin text-amethyst" />
               <span className="font-mono">miranda · synthesizing…</span>
@@ -145,7 +145,7 @@ export const MirandaChat = () => {
             <button
               key={s}
               onClick={() => send(s)}
-              className="text-[11px] font-serif italic px-3 py-1.5 rounded-full bg-lavender/70 border border-amethyst/20 text-amethyst hover:bg-white hover:border-amethyst transition-colors"
+              className="text-[11px] font-sans font-medium leading-snug px-3 py-1.5 rounded-full bg-white/80 border border-amethyst/20 text-amethyst hover:bg-mint hover:border-emerald-200 transition-colors text-left"
             >
               "{s}"
             </button>
@@ -161,14 +161,14 @@ export const MirandaChat = () => {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask Miranda — paste a treatment, a logline, a question…"
+          placeholder="Ask Miranda about bets, markets, risk, or the next brief..."
           disabled={loading}
-          className="flex-1 bg-lavender/40 border border-border/60 rounded-full px-5 py-3 text-sm text-obsidian font-serif italic placeholder:text-muted-foreground/70 focus:outline-none focus:border-amethyst focus:bg-white transition-colors disabled:opacity-60"
+          className="flex-1 bg-lavender/40 border border-border/60 rounded-full px-5 py-3 text-sm text-obsidian font-sans placeholder:text-muted-foreground/70 focus:outline-none focus:border-amethyst focus:bg-white transition-colors disabled:opacity-60"
         />
         <button
           type="submit"
           disabled={loading || !input.trim()}
-          className="h-11 w-11 rounded-full bg-gradient-amethyst text-white flex items-center justify-center shadow-halo hover:scale-[1.05] active:scale-100 transition-transform disabled:opacity-40 disabled:hover:scale-100"
+          className="h-11 w-11 rounded-full bg-gradient-aura text-white flex items-center justify-center shadow-halo hover:scale-[1.05] active:scale-100 transition-transform disabled:opacity-40 disabled:hover:scale-100"
           aria-label="Send to Miranda"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

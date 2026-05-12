@@ -3,9 +3,11 @@ import { Link } from "react-router-dom";
 import {
   Activity,
   AlertTriangle,
+  ArrowUpRight,
   CheckCircle2,
   Clock3,
   Database,
+  Download,
   Gauge,
   MailCheck,
   Network,
@@ -16,7 +18,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import { mieClient, type DemoReadinessResult, type DemoWorkflowRunResult, type HealthResult, type PublicConfigResult } from "@/lib/mieClient";
+import { mieClient, type DatasetInventoryResult, type DemoReadinessResult, type DemoWorkflowRunResult, type HealthResult, type PublicConfigResult } from "@/lib/mieClient";
 
 type ContractResult = {
   routes?: Record<string, { method?: string; path?: string; response_model?: string }>;
@@ -36,6 +38,90 @@ const phaseOrder = [
   "phase_4_dispatch_loop",
 ];
 
+const ARCHITECTURE_STEPS = [
+  {
+    label: "Data Foundation",
+    path: "/demo",
+    talk: "Structured portfolio, market, graph, and historical-memory evidence are normalized into a shared insight package.",
+  },
+  {
+    label: "NAT Orchestration",
+    path: "/",
+    talk: "NAT coordinates intake, tool calls, memory lookup, reasoning trace, operator handoff, and dispatch.",
+  },
+  {
+    label: "Nemotron Reasoning",
+    path: "/",
+    talk: "Nemotron Nano 9B v2 is the live reasoning adapter for concise, low-latency executive synthesis.",
+  },
+  {
+    label: "Operator Evidence",
+    path: "/operator",
+    talk: "Analysts can validate the brief through portfolio assets, filters, clusters, and traceable evidence.",
+  },
+  {
+    label: "Persona Outputs",
+    path: "/communication",
+    talk: "The same result set becomes an executive inbox brief or an operator workspace without separate backends.",
+  },
+];
+
+const MODEL_RATIONALE = [
+  {
+    label: "NAT",
+    choice: "Workflow orchestration",
+    reason: "Coordinates the workflow rather than just answering a prompt.",
+  },
+  {
+    label: "Nemotron Nano 9B v2",
+    choice: "Live reasoning model",
+    reason: "Handles fast executive synthesis with a repeatable brief shape.",
+  },
+  {
+    label: "Polars",
+    choice: "Tabular evidence layer",
+    reason: "Prepares portfolio scoring, filtering, and evidence packages quickly.",
+  },
+  {
+    label: "RAPIDS",
+    choice: "Optional acceleration",
+    reason: "Shows the enterprise acceleration path when GPU is available.",
+  },
+];
+
+const AGENTIC_COMPLEXITY = [
+  {
+    label: "Asset Intake",
+    detail: "Scripts and concepts arrive from drives, submissions, reports, and internal trackers.",
+  },
+  {
+    label: "Signal Assembly",
+    detail: "Audience behavior, market momentum, cultural signals, and comps need to be joined.",
+  },
+  {
+    label: "Decision Framing",
+    detail: "Executives need a clear greenlight recommendation, not another dashboard to interpret.",
+  },
+  {
+    label: "Delivery Loop",
+    detail: "The final insight has to become an email, memo, or workflow artifact without rework.",
+  },
+];
+
+const NAT_CAPABILITIES = [
+  "Agents",
+  "Tool Execution",
+  "Memory",
+  "Retrieval",
+  "Guardrails",
+  "Model Interfaces",
+  "Evaluation",
+  "Observability",
+  "Profiling",
+];
+
+const NAT_FRAMEWORKS = ["Custom Python workflow", "FastAPI routes"];
+
 function formatLatency(value?: number | null): string {
   return typeof value === "number" ? `${value.toFixed(1)}ms` : "unavailable";
 }
@@ -48,10 +134,24 @@ function statusDot(ready?: boolean): string {
   return ready ? "bg-emerald-500" : "bg-amber-500";
 }
 
+function formatBytes(value?: number): string {
+  if (typeof value !== "number") return "unknown";
+  if (value < 1024) return `${value} B`;
+  const units = ["KB", "MB", "GB"];
+  let size = value / 1024;
+  let unit = units[0];
+  for (let index = 1; size >= 1024 && index < units.length; index += 1) {
+    size /= 1024;
+    unit = units[index];
+  }
+  return `${size.toFixed(size >= 10 ? 1 : 2)} ${unit}`;
+}
+
 export function DemoControlRoom() {
   const [readiness, setReadiness] = useState<DemoReadinessResult | null>(null);
   const [health, setHealth] = useState<HealthResult | null>(null);
   const [publicConfig, setPublicConfig] = useState<PublicConfigResult | null>(null);
+  const [datasetInventory, setDatasetInventory] = useState<DatasetInventoryResult | null>(null);
   const [contract, setContract] = useState<ContractResult | null>(null);
   const [workflow, setWorkflow] = useState<DemoWorkflowRunResult | null>(null);
   const [lastSync, setLastSync] = useState<string>("not checked");
@@ -75,9 +175,11 @@ export function DemoControlRoom() {
         mieClient.publicConfig(),
         mieClient.frontendContract() as Promise<ContractResult>,
       ]);
+      const nextDatasets = await mieClient.datasets().catch(() => null);
       setReadiness(nextReadiness);
       setHealth(nextHealth);
       setPublicConfig(nextPublicConfig);
+      setDatasetInventory(nextDatasets);
       setContract(nextContract);
       setLastSync(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     } catch (err) {
@@ -98,7 +200,7 @@ export function DemoControlRoom() {
       const payload = await mieClient.demoWorkflowRun();
       setWorkflow(payload);
     } catch (err) {
-      setWorkflowError(err instanceof Error ? err.message : "Unable to run the Vault AI workflow simulation.");
+      setWorkflowError(err instanceof Error ? err.message : "Unable to run the customer workflow simulation.");
     } finally {
       setWorkflowLoading(false);
     }
@@ -140,14 +242,6 @@ export function DemoControlRoom() {
   const missingEntries = Object.entries(publicConfig?.missing || {}).flatMap(([group, items]) =>
     (items || []).map((item) => `${group}: ${item}`),
   );
-  const architecture = publicConfig?.architecture_positioning;
-  const architectureCards = [
-    { name: "NAT", component: architecture?.components?.nat },
-    { name: "Nemotron", component: architecture?.components?.nemotron },
-    { name: "Polars", component: architecture?.components?.polars },
-    { name: "RAPIDS", component: architecture?.components?.rapids },
-  ];
-
   const checks = [
     {
       label: "Backend",
@@ -203,7 +297,7 @@ export function DemoControlRoom() {
           </div>
           <h1 className="mt-4 font-serif text-4xl md:text-5xl text-obsidian">NAT Executive Briefing Agent</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-            The demo foregrounds NVIDIA Agent Intelligence Toolkit orchestration and Nemotron reasoning.
+            The demo foregrounds NVIDIA NeMo Agent Toolkit orchestration and Nemotron reasoning.
             Polars and RAPIDS sit underneath as the evidence-processing and acceleration layer.
           </p>
         </div>
@@ -232,35 +326,220 @@ export function DemoControlRoom() {
         </div>
       )}
 
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-5 shadow-soft">
-        <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+      <div className="rounded-lg border border-border/70 bg-white/75 p-5 shadow-soft">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="font-serif text-2xl text-obsidian">Senior Solutions Architect Framing</h2>
-            <p className="mt-2 text-sm leading-6 text-emerald-900/80">
-              {architecture?.primary_story || "NAT-orchestrated executive briefing agent with Nemotron reasoning."}
-            </p>
-            <p className="mt-2 text-sm leading-6 text-emerald-900/70">
-              {architecture?.demo_boundary || "This mimics workflow mechanics without reproducing proprietary predictive models."}
+            <h2 className="font-serif text-2xl text-obsidian">The Studio Problem: Insight Does Not Travel Cleanly</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
+              Studios already have assets, audience data, and internal expertise. The gap is a repeatable
+              workflow that carries evidence from analysis to executive action.
             </p>
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            {architectureCards.map(({ name, component }) => (
-              <div key={name} className="rounded-md border border-white/80 bg-white/70 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] tracking-couture uppercase text-muted-foreground">{name}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-[9px] tracking-couture uppercase ${component?.foreground ? "bg-emerald-100 text-emerald-700" : "bg-secondary text-muted-foreground"}`}>
-                    {component?.foreground ? "foreground" : "support"}
-                  </span>
-                </div>
-                <div className="mt-2 text-sm text-obsidian">{component?.role || "Architecture layer"}</div>
-                <div className="mt-1 text-xs leading-5 text-muted-foreground">{component?.demo_use}</div>
+          <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] tracking-couture uppercase text-emerald-700">
+            Agentic studio workflow
+          </span>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {AGENTIC_COMPLEXITY.map((item) => (
+            <div key={item.label} className="rounded-md border border-border/70 bg-white/65 p-4">
+              <div className="text-[10px] tracking-couture uppercase text-emerald-700">{item.label}</div>
+              <div className="mt-2 text-xs leading-5 text-muted-foreground">{item.detail}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-5 rounded-lg border border-emerald-300 bg-gradient-mint px-5 py-5 shadow-soft">
+          <div className="text-[10px] tracking-couture uppercase text-emerald-700">Demo Thesis</div>
+          <div className="mt-2 max-w-5xl text-xl font-semibold leading-snug text-obsidian">
+            NAT + Nemotron turns scattered studio evidence into an observable agent run.
+          </div>
+          <div className="mt-4 grid gap-2 md:grid-cols-4">
+            {["Tool calls", "Evidence package", "Reasoning trace", "Inbox-ready output"].map((item) => (
+              <div key={item} className="rounded-md border border-emerald-200 bg-white/70 px-3 py-2 text-[10px] tracking-couture uppercase text-emerald-800">
+                {item}
               </div>
             ))}
           </div>
         </div>
-        <div className="mt-4 rounded-md border border-emerald-200 bg-white/65 px-3 py-2 text-xs leading-5 text-emerald-900/75">
-          Critical read: this should stay deliberately narrow. The win is showing agentic workflow might,
-          not claiming to replace Vault AI's secret predictive models.
+      </div>
+
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50/45 p-5 shadow-soft">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="font-serif text-2xl text-obsidian">NeMo Agent Toolkit Control Plane</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-emerald-900/70">
+              In this demo, NeMo Agent Toolkit is the orchestration layer: it sits above the Python workflow,
+              coordinates tools and reasoning, and keeps model choice, evaluation, and observability explicit.
+            </p>
+          </div>
+          <span className="rounded-full bg-white/80 px-3 py-1.5 text-[10px] tracking-couture uppercase text-emerald-700">
+            framework agnostic
+          </span>
+        </div>
+
+        <div className="mt-5 rounded-lg border border-emerald-200 bg-white/80 p-4">
+          <div className="grid gap-3 lg:grid-cols-[1fr_1.25fr_1fr]">
+            <div className="rounded-md border border-border/70 bg-white/75 p-4">
+              <div className="text-[10px] tracking-couture uppercase text-muted-foreground">Input Surfaces</div>
+              <div className="mt-3 space-y-2 text-xs text-obsidian">
+                <div className="rounded bg-secondary px-3 py-2">Executive question</div>
+                <div className="rounded bg-secondary px-3 py-2">Operator validation</div>
+                <div className="rounded bg-secondary px-3 py-2">Template dispatch</div>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-emerald-300 bg-emerald-600 p-4 text-white shadow-soft">
+              <div className="text-center text-[10px] tracking-couture uppercase text-white/80">
+                NVIDIA NeMo Agent Toolkit
+              </div>
+              <div className="mt-3 rounded-md bg-white/15 px-4 py-3 text-center text-sm font-semibold">
+                Optimized Agentic Application
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
+                {NAT_CAPABILITIES.map((capability) => (
+                  <div key={capability} className="rounded bg-white/15 px-2 py-2 text-center text-[10px] leading-4">
+                    {capability}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-md border border-border/70 bg-white/75 p-4">
+              <div className="text-[10px] tracking-couture uppercase text-muted-foreground">Output Surfaces</div>
+              <div className="mt-3 space-y-2 text-xs text-obsidian">
+                <div className="rounded bg-secondary px-3 py-2">Greenlight brief</div>
+                <div className="rounded bg-secondary px-3 py-2">Evidence workspace</div>
+                <div className="rounded bg-secondary px-3 py-2">Inbox-ready artifact</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr_1fr]">
+            <div className="rounded-md border border-border/70 bg-white/75 p-3">
+              <div className="text-[10px] tracking-couture uppercase text-muted-foreground">Reasoning</div>
+              <div className="mt-1 font-mono text-xs text-obsidian">Nemotron Nano 9B v2 via NIM</div>
+              <div className="mt-2 text-[11px] leading-5 text-muted-foreground">
+                Fast executive synthesis with a stable greenlight-brief shape.
+              </div>
+            </div>
+            <div className="rounded-md border border-border/70 bg-white/75 p-3">
+              <div className="text-[10px] tracking-couture uppercase text-muted-foreground">Demo Runtime Layer</div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {NAT_FRAMEWORKS.map((framework) => (
+                  <span key={framework} className="rounded-full bg-secondary px-2 py-1 text-[9px] tracking-couture uppercase text-muted-foreground">
+                    {framework}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-2 text-[11px] leading-5 text-muted-foreground">
+                Simple local runtime now, reusable adapter boundary later.
+              </div>
+            </div>
+            <div className="rounded-md border border-border/70 bg-white/75 p-3">
+              <div className="text-[10px] tracking-couture uppercase text-muted-foreground">Evidence Layer</div>
+              <div className="mt-1 font-mono text-xs text-obsidian">Polars now · RAPIDS path when GPU is available</div>
+              <div className="mt-2 text-[11px] leading-5 text-muted-foreground">
+                Fast tabular preparation with a credible GPU acceleration path.
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {MODEL_RATIONALE.map((item) => (
+              <div key={item.label} className="rounded-md border border-border/70 bg-white/75 p-3">
+                <div className="text-[10px] tracking-couture uppercase text-amethyst">{item.label}</div>
+                <div className="mt-1 text-xs font-semibold text-obsidian">{item.choice}</div>
+                <div className="mt-2 text-[11px] leading-5 text-muted-foreground">{item.reason}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border/70 bg-white/75 p-5 shadow-soft">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="font-serif text-2xl text-obsidian">Architecture Walkthrough</h2>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
+              Follow the shared insight package from evidence preparation through NAT orchestration, Nemotron reasoning,
+              operator validation, and executive dispatch.
+            </p>
+          </div>
+          <div className="rounded-full bg-secondary px-3 py-1.5 text-[10px] tracking-couture uppercase text-muted-foreground">
+            shared insight path
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-5">
+          {ARCHITECTURE_STEPS.map((step, index) => (
+            <Link
+              key={step.label}
+              to={step.path}
+              className="rounded-md border border-border/70 bg-white/65 p-3 transition-colors hover:bg-white"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-[10px] text-amethyst">{String(index + 1).padStart(2, "0")}</span>
+                <ArrowUpRight className="h-3 w-3 text-muted-foreground" />
+              </div>
+              <div className="mt-2 text-sm font-medium text-obsidian">{step.label}</div>
+              <div className="mt-1 text-[11px] leading-5 text-muted-foreground">{step.talk}</div>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border/70 bg-white/75 p-5 shadow-soft">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="font-serif text-2xl text-obsidian">Current Datasets</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
+              These are the local evidence datasets currently available to Miranda and the operator workspace.
+              Download exports are generated from the backend allowlist, not arbitrary file paths.
+            </p>
+          </div>
+          <span className="rounded-full bg-secondary px-3 py-1.5 text-[10px] tracking-couture uppercase text-muted-foreground">
+            {datasetInventory?.count ?? 0} files · {datasetInventory?.data_dir || "data"}
+          </span>
+        </div>
+
+        <div className="mt-4 overflow-hidden rounded-lg border border-border/70 bg-white/60">
+          <div className="grid grid-cols-[1.35fr_0.45fr_0.45fr_0.45fr_1fr] gap-3 border-b border-border/60 px-4 py-3 text-[10px] tracking-couture uppercase text-muted-foreground">
+            <span>Dataset</span>
+            <span>Rows</span>
+            <span>Columns</span>
+            <span>Size</span>
+            <span>Download</span>
+          </div>
+          <div className="divide-y divide-border/60">
+            {(datasetInventory?.items || []).map((item) => (
+              <div key={item.dataset_id} className="grid grid-cols-[1.35fr_0.45fr_0.45fr_0.45fr_1fr] gap-3 px-4 py-3 text-xs">
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-obsidian">{item.filename}</div>
+                  <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground">
+                    {item.format.toUpperCase()} · {(item.columns || []).slice(0, 4).join(", ")}
+                  </div>
+                </div>
+                <div className="font-mono text-obsidian">{typeof item.rows === "number" ? item.rows.toLocaleString() : "--"}</div>
+                <div className="font-mono text-obsidian">{item.column_count ?? "--"}</div>
+                <div className="font-mono text-muted-foreground">{formatBytes(item.size_bytes)}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {item.download_formats.map((format) => (
+                    <a
+                      key={`${item.dataset_id}-${format}`}
+                      href={mieClient.datasetDownloadUrl(item.dataset_id, format)}
+                      className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-white px-2 py-1 text-[9px] tracking-couture uppercase text-obsidian transition-colors hover:border-amethyst hover:text-amethyst"
+                    >
+                      <Download className="h-3 w-3" />
+                      {format}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {!datasetInventory?.items?.length && (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                Dataset inventory is unavailable. Confirm the backend is running on {mieClient.config.apiBase}.
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -478,7 +757,7 @@ export function DemoControlRoom() {
           <div className="rounded-lg border border-border/70 bg-white/75 p-5 shadow-soft">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="font-serif text-2xl text-obsidian">Vault AI Workflow Run</h2>
+                <h2 className="font-serif text-2xl text-obsidian">Customer Workflow Run</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
                   One simulated autonomous run across intake, Miranda, operator evidence, and dispatch.
                 </p>

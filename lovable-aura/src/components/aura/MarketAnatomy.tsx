@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import {
-  Filter, Search, Sparkles, Sliders, Mail, FileCode2, Eye,
+  Filter, Search, Sparkles, Sliders,
   BookMarked, FolderOpen, Boxes, Layers, RefreshCw, Activity,
   Cpu, Network, Database,
 } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
   mieClient,
@@ -35,7 +35,6 @@ const TABS = [
   { id: "anatomy",      label: "Portfolio Logic",        Icon: Layers },
   { id: "knowledge",    label: "Living Knowledge Base",  Icon: BookMarked },
   { id: "orchestration",label: "Orchestration Lab",      Icon: Sliders },
-  { id: "template",     label: "Template Architect",     Icon: FileCode2 },
 ] as const;
 type Tab = typeof TABS[number]["id"];
 
@@ -66,6 +65,13 @@ const assetFromWorkspaceRow = (row: WorkspaceRow): PortfolioAsset => ({
     { atom_id: `${row.script_id}:risk`, atom_type: "risk", label: row.risk_category, source_field: "risk_category", role: "risk posture" },
   ],
 });
+
+const statusFromCluster = (cluster: MapCluster): StatusFilter => {
+  const verdict = cluster.dominant_verdict.toLowerCase();
+  if (verdict.includes("greenlight")) return "rising";
+  if (verdict.includes("reconsider")) return "fading";
+  return "peaking";
+};
 
 /* ====================== Main view ======================== */
 
@@ -98,7 +104,7 @@ export const MarketAnatomy = () => {
           <div>
             <div className="text-[10px] tracking-couture uppercase text-amethyst mb-3">Suite 03 — Neural · Operator Studio</div>
             <h1 className="font-serif text-6xl md:text-7xl text-obsidian leading-[0.95]">
-              Quant <span className="italic">Studio.</span>
+              Analyst <span className="italic">Studio.</span>
             </h1>
             <p className="mt-5 max-w-xl text-muted-foreground leading-relaxed">
               The operator layer for the Orchestrator. Inspect portfolio assets,
@@ -106,7 +112,7 @@ export const MarketAnatomy = () => {
             </p>
           </div>
           <div className="text-right">
-            <div className="font-serif text-3xl text-obsidian">11.2M<span className="text-amethyst">/d</span></div>
+            <div className="font-serif text-3xl text-obsidian">11.2M<span className="text-mint-deep">/d</span></div>
             <div className="text-[10px] tracking-couture uppercase text-muted-foreground">Signals processed today</div>
           </div>
         </div>
@@ -119,7 +125,7 @@ export const MarketAnatomy = () => {
         />
 
         {/* Tabs */}
-        <div className="mt-8 flex flex-wrap gap-1 p-1 rounded-full bg-white/60 border border-border/60 w-fit shadow-soft">
+        <div className="mt-8 flex flex-wrap gap-1 p-1 rounded-full bg-white/70 border border-emerald-200/50 w-fit shadow-soft">
           {TABS.map(({ id, label, Icon }) => {
             const active = tab === id;
             return (
@@ -127,7 +133,7 @@ export const MarketAnatomy = () => {
                 key={id}
                 onClick={() => setTab(id)}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-[10px] tracking-couture uppercase transition-all
-                  ${active ? "bg-gradient-amethyst text-white shadow-halo" : "text-foreground/60 hover:text-obsidian"}`}
+                  ${active ? "bg-gradient-aura text-white shadow-halo" : "text-foreground/60 hover:text-obsidian hover:bg-mint"}`}
               >
                 <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />
                 {label}
@@ -141,7 +147,6 @@ export const MarketAnatomy = () => {
         {tab === "anatomy"       && <AtomicAnatomy onSynced={() => setLastSync(new Date())} />}
         {tab === "knowledge"     && <KnowledgeBase />}
         {tab === "orchestration" && <OrchestrationLab />}
-        {tab === "template"      && <TemplateArchitect />}
       </div>
     </section>
   );
@@ -179,7 +184,9 @@ const HeartbeatStrip = ({
     {
       label: "Graph",
       value: ops?.graph?.active_engine || "unknown",
-      note: ops?.graph?.compute_source || "package scan pending",
+      note: ops?.graph?.accelerated_available
+        ? "cuGraph acceleration active"
+        : "zero-code GPU path via nx-cugraph",
       Icon: Network,
       tone: ops?.graph?.accelerated_available ? "#10B981" : "#F59E0B",
     },
@@ -193,28 +200,28 @@ const HeartbeatStrip = ({
   ];
 
   return (
-    <div className="mt-7 rounded-xl border border-obsidian/10 bg-obsidian text-white shadow-soft overflow-hidden">
+    <div className="mt-7 rounded-xl border border-emerald-200 bg-white/85 text-obsidian shadow-soft overflow-hidden">
       <div className="grid md:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
         {items.map(({ label, value, note, Icon, tone }) => (
-          <div key={label} className="min-w-0 px-4 py-3 border-b md:border-b-0 md:border-r border-white/10">
-            <div className="flex items-center gap-2 text-[10px] tracking-couture uppercase text-white/55">
+          <div key={label} className="min-w-0 px-4 py-3 border-b md:border-b-0 md:border-r border-emerald-200/50">
+            <div className="flex items-center gap-2 text-[10px] tracking-couture uppercase text-muted-foreground">
               <Icon className="h-3.5 w-3.5" style={{ color: tone }} />
               {label}
             </div>
             <div className="mt-1 truncate font-data text-sm" style={{ color: tone }}>{value}</div>
-            <div className="truncate text-[11px] text-white/50">{note}</div>
+            <div className="truncate text-[11px] text-muted-foreground">{note}</div>
           </div>
         ))}
         <div className="flex md:flex-col items-center md:items-end justify-between gap-3 px-4 py-3">
           <div className="min-w-0">
-            <div className="text-[10px] tracking-couture uppercase text-white/45">Last Sync</div>
-            <div className="font-data text-xs text-white/75">
+            <div className="text-[10px] tracking-couture uppercase text-muted-foreground">Last Sync</div>
+            <div className="font-data text-xs text-obsidian">
               {lastSync ? lastSync.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "pending"}
             </div>
           </div>
           <button
             onClick={onRefresh}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-white/70 hover:text-white hover:border-white/35 transition-colors"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200 text-mint-deep hover:bg-mint transition-colors"
             aria-label="Refresh heartbeat"
           >
             <RefreshCw className="h-3.5 w-3.5" />
@@ -222,7 +229,7 @@ const HeartbeatStrip = ({
         </div>
       </div>
       {error && (
-        <div className="border-t border-white/10 px-4 py-2 text-[11px] text-[#F43F5E]">
+        <div className="border-t border-rose-200/70 bg-rose-50/70 px-4 py-2 text-[11px] text-[#F43F5E]">
           {error}
         </div>
       )}
@@ -238,6 +245,7 @@ const AtomicAnatomy = ({ onSynced }: { onSynced: () => void }) => {
   const [workspace, setWorkspace] = useState<WorkspaceResult["result"] | null>(null);
   const [marketSignals, setMarketSignals] = useState<MarketSignal[]>([]);
   const [network, setNetwork] = useState<NetworkResult["result"] | null>(null);
+  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
   const [loadingBackend, setLoadingBackend] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
 
@@ -272,6 +280,10 @@ const AtomicAnatomy = ({ onSynced }: { onSynced: () => void }) => {
     ? workspaceStream.portfolio_assets
     : workspaceRows.map(assetFromWorkspaceRow);
   const clusters = workspaceStream?.clusters || [];
+  const activeCluster = useMemo(() => {
+    if (!clusters.length) return DEFAULT_CLUSTERS[0];
+    return clusters.find((cluster) => cluster.cluster_id === selectedClusterId) || clusters[0];
+  }, [clusters, selectedClusterId]);
   const kpis = workspace?.streams?.workspace?.kpis;
   const benchmark = workspace?.streams?.workspace?.benchmark;
   const graphSummary = workspace?.streams?.graph?.summary;
@@ -317,7 +329,7 @@ const AtomicAnatomy = ({ onSynced }: { onSynced: () => void }) => {
           <div className="flex items-center gap-2">
             <Boxes className="h-3.5 w-3.5 text-amethyst" />
             <span className="text-[10px] tracking-couture uppercase text-amethyst">
-              Signal Map Preview · Backend Signal spotify_00001
+              Interactive Signal Map · Backend Signal spotify_00001
             </span>
           </div>
           <div className="flex gap-2">
@@ -330,19 +342,77 @@ const AtomicAnatomy = ({ onSynced }: { onSynced: () => void }) => {
               Sync
             </button>
             <span className="inline-flex items-center text-[10px] tracking-couture uppercase px-3 py-1.5 rounded-full bg-secondary text-muted-foreground">
-              Static layout
+              Drag clusters
             </span>
           </div>
         </div>
-        <div className="relative h-[440px] bg-gradient-iridescent overflow-hidden">
-          <Leiden3DGraph clusters={clusters} />
-          <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-[10px] tracking-couture uppercase text-obsidian/60">
-            <span>
-              {formatCompact(graphSummary?.edges)} edges · {formatCompact(graphSummary?.unique_scripts)} scripts · {marketSignals.length || 6} market signals
-            </span>
-            <span className="text-amethyst">
-              {backendError ? "backend unavailable" : workspace ? "live counts · preview map" : "syncing"}
-            </span>
+        <div className="grid xl:grid-cols-[1fr_320px]">
+          <div className="relative h-[440px] overflow-hidden bg-[linear-gradient(135deg,rgba(255,255,255,0.94),rgba(236,253,245,0.84)_42%,rgba(245,243,255,0.92))]">
+            <Leiden3DGraph
+              clusters={clusters}
+              selectedClusterId={activeCluster?.cluster_id}
+              onSelect={(cluster) => setSelectedClusterId(cluster.cluster_id)}
+            />
+            <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-[10px] tracking-couture uppercase text-obsidian/60">
+              <span>
+                {formatCompact(graphSummary?.edges)} edges · {formatCompact(graphSummary?.unique_scripts)} scripts · {marketSignals.length || 6} market signals
+              </span>
+              <span className="text-amethyst">
+                {backendError ? "backend unavailable" : workspace ? "live audience clusters · draggable map" : "syncing"}
+              </span>
+            </div>
+          </div>
+          <div className="border-t xl:border-l xl:border-t-0 border-emerald-200/60 bg-white/82 p-5">
+            {activeCluster && (
+              <div>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] tracking-couture uppercase text-mint-deep">Selected Audience Segment</div>
+                    <div className="mt-2 text-base font-semibold text-obsidian">{audienceSegmentLabel(activeCluster)}</div>
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      {activeCluster.dominant_verdict} · {activeCluster.dominant_trend || "trend blend"}
+                    </div>
+                  </div>
+                  <span
+                    className="mt-1 h-3 w-3 rounded-full ring-2 ring-white"
+                    style={{ backgroundColor: clusterColor(activeCluster, clusters.findIndex((cluster) => cluster.cluster_id === activeCluster.cluster_id)) }}
+                  />
+                </div>
+                <div className="mt-5 grid grid-cols-1 gap-3 font-data text-[11px] text-obsidian/80">
+                  <div className="rounded-lg border border-border/60 bg-gradient-mint px-3 py-2">
+                    <div className="text-[9px] tracking-couture uppercase text-muted-foreground">Audience Lens</div>
+                    <div className="mt-1 font-sans text-sm text-obsidian">{activeCluster.style_tribe || activeCluster.label}</div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <span className="rounded-lg border border-border/60 bg-white px-2 py-2">{formatCompact(activeCluster.records)} records</span>
+                    <span className="rounded-lg border border-border/60 bg-white px-2 py-2">{formatScore(activeCluster.share * 100, 1)}% share</span>
+                    <span className="rounded-lg border border-border/60 bg-white px-2 py-2">{activeCluster.node_count} nodes</span>
+                  </div>
+                </div>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatusFilter(statusFromCluster(activeCluster));
+                      setQuery("");
+                    }}
+                    className="rounded-full bg-gradient-aura px-3 py-1.5 text-[9px] tracking-couture uppercase text-white shadow-soft"
+                  >
+                    Filter Matrix
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatusFilter("all");
+                      setQuery("");
+                    }}
+                    className="rounded-full border border-border/70 bg-white px-3 py-1.5 text-[9px] tracking-couture uppercase text-muted-foreground hover:text-obsidian"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -393,6 +463,20 @@ const AtomicAnatomy = ({ onSynced }: { onSynced: () => void }) => {
                 {STATUS_FILTERS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 border-b border-border/60 bg-gradient-mint px-6 py-3 text-xs text-muted-foreground lg:grid-cols-2">
+          <div>
+            <span className="font-data text-obsidian">Viability</span>
+            <span> = greenlight attractiveness from genre lift, audience behavior, signal momentum, and prime-time affinity.</span>
+          </div>
+          <div>
+            <span className="font-data text-obsidian">Completion</span>
+            <span> = predicted audience finish-through from observed completion behavior plus asset viability.</span>
+          </div>
+          <div className="lg:col-span-2 text-[10px] tracking-couture uppercase text-muted-foreground">
+            Source: synthetic demo corpus in scripts_150k.parquet, generated by the local data pipeline and ranked with Polars; not a production trained greenlight model.
           </div>
         </div>
 
@@ -616,157 +700,122 @@ const KnowledgeBase = () => {
 /* ====================== Orchestration Lab ====================== */
 
 const AGENTS = [
-  { name: "Aura · Curator",     role: "Selects atoms worth your attention",      effort: 70, on: true },
-  { name: "Aura · Synthesizer", role: "Distills three Greenlight bullets",        effort: 85, on: true },
-  { name: "Aura · Mailroom",    role: "Drafts and dispatches branded emails",     effort: 55, on: true },
-  { name: "Aura · Archivist",   role: "Files briefs into the Living Knowledge Base", effort: 40, on: false },
+  {
+    name: "Curator",
+    role: "Ranks portfolio evidence and audience segments.",
+    mode: "Balanced",
+    on: true,
+    output: "Candidate bets",
+  },
+  {
+    name: "Synthesizer",
+    role: "Turns evidence into the executive recommendation.",
+    mode: "Deep",
+    on: true,
+    output: "Greenlight brief",
+  },
+  {
+    name: "Dispatcher",
+    role: "Formats and sends the inbox-ready artifact.",
+    mode: "Fast",
+    on: true,
+    output: "Email dispatch",
+  },
+  {
+    name: "Archivist",
+    role: "Files the run into the living knowledge base.",
+    mode: "Fast",
+    on: false,
+    output: "Memory update",
+  },
+];
+
+type AgentMode = typeof AGENTS[number]["mode"];
+const AGENT_MODES: Array<{ label: AgentMode; detail: string }> = [
+  { label: "Fast", detail: "low latency" },
+  { label: "Balanced", detail: "demo default" },
+  { label: "Deep", detail: "more reasoning" },
 ];
 
 const OrchestrationLab = () => {
   const [agents, setAgents] = useState(AGENTS);
 
   return (
-    <div className="grid lg:grid-cols-[1.4fr_1fr] gap-6 fade-up">
+    <div className="fade-up">
       {/* Agent control panel */}
       <div className="rounded-2xl border-iridescent bg-white/80 shadow-ethereal p-6">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-[10px] tracking-couture uppercase text-amethyst">Orchestration Lab</div>
-            <h3 className="font-serif text-2xl text-obsidian">Tune your agents.</h3>
+            <h3 className="font-serif text-2xl text-obsidian">Configure the agent run.</h3>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
+              Choose which workflow agents participate and how much reasoning budget each step gets.
+              This is a demo control surface for the NAT orchestration plan, not a hidden model retraining panel.
+            </p>
           </div>
-          <span className="text-[10px] tracking-couture uppercase text-muted-foreground">NAT + Nemotron Nano · 4 agents</span>
+          <span className="text-[10px] tracking-couture uppercase text-muted-foreground">NAT + Nemotron Nano · run plan</span>
         </div>
 
-        <div className="mt-6 divide-y divide-border/60">
+        <div className="mt-6 grid gap-3">
           {agents.map((a, i) => (
-            <div key={a.name} className="py-4 grid sm:grid-cols-[1fr_auto_auto] items-center gap-4">
-              <div>
+            <div key={a.name} className="rounded-xl border border-border/70 bg-white/70 p-4">
+              <div className="grid gap-4 lg:grid-cols-[1fr_auto_auto] lg:items-center">
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-3.5 w-3.5 text-amethyst" strokeWidth={1.5} />
-                  <span className="font-serif text-obsidian">{a.name}</span>
+                  <div>
+                    <div className="font-sans font-semibold text-obsidian">{a.name}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{a.role}</div>
+                    <div className="mt-2 inline-flex rounded-full bg-mint px-2 py-0.5 text-[9px] tracking-couture uppercase text-mint-deep">
+                      Output · {a.output}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground mt-0.5">{a.role}</div>
-              </div>
 
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] tracking-couture uppercase text-muted-foreground">Reasoning</span>
-                <input
-                  type="range"
-                  min={0} max={100}
-                  value={a.effort}
-                  onChange={(e) => setAgents((arr) => arr.map((x, j) => j===i ? {...x, effort: +e.target.value} : x))}
-                  className="w-32 accent-amethyst"
-                />
-                <span className="font-data text-xs text-obsidian w-10 text-right">{a.effort}%</span>
-              </div>
+                <div>
+                  <div className="mb-2 text-[10px] tracking-couture uppercase text-muted-foreground">Reasoning Budget</div>
+                  <div className="inline-flex rounded-full border border-border/70 bg-white p-1">
+                    {AGENT_MODES.map((mode) => {
+                      const active = a.mode === mode.label;
+                      return (
+                        <button
+                          key={mode.label}
+                          type="button"
+                          onClick={() => setAgents((arr) => arr.map((x, j) => j === i ? { ...x, mode: mode.label } : x))}
+                          className={`rounded-full px-3 py-1.5 text-[10px] tracking-couture uppercase transition-colors ${
+                            active ? "bg-gradient-aura text-white shadow-soft" : "text-muted-foreground hover:bg-mint hover:text-obsidian"
+                          }`}
+                          title={mode.detail}
+                        >
+                          {mode.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-              <Switch
-                checked={a.on}
-                onCheckedChange={(v) => setAgents((arr) => arr.map((x, j) => j===i ? {...x, on: v} : x))}
-                className="data-[state=checked]:bg-gradient-amethyst data-[state=unchecked]:bg-secondary"
-              />
+                <label className="flex items-center justify-between gap-3 rounded-full border border-border/70 bg-white px-3 py-2">
+                  <span className="text-[10px] tracking-couture uppercase text-obsidian">
+                    {a.on ? "Included in run" : "Skipped"}
+                  </span>
+                  <Switch
+                    checked={a.on}
+                    onCheckedChange={(v) => setAgents((arr) => arr.map((x, j) => j===i ? {...x, on: v} : x))}
+                    className="data-[state=checked]:bg-gradient-aura data-[state=unchecked]:bg-secondary"
+                  />
+                </label>
+              </div>
             </div>
           ))}
         </div>
-      </div>
 
-      {/* Email templates manager */}
-      <div className="rounded-2xl border-iridescent bg-white/80 shadow-ethereal p-6">
-        <div className="flex items-center gap-2">
-          <Mail className="h-3.5 w-3.5 text-amethyst" />
-          <div className="text-[10px] tracking-couture uppercase text-amethyst">Email Templates</div>
+        <div className="mt-5 rounded-xl border border-emerald-200 bg-gradient-mint px-4 py-3">
+          <div className="text-[10px] tracking-couture uppercase text-mint-deep">What changes in the demo</div>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            These controls demonstrate the kind of orchestration knobs a customer could expose:
+            include or skip workflow steps, and choose faster or deeper reasoning for each step.
+            The live demo keeps the runtime stable for reliability.
+          </p>
         </div>
-        <h3 className="font-serif text-2xl text-obsidian mt-1">Voice library.</h3>
-
-        <ul className="mt-5 space-y-3">
-          {[
-            { name: "Greenlight — Executive",  desc: "Warm, decisive, 90 words", active: true  },
-            { name: "Develop — Strategy Desk", desc: "Curious, exploratory, 140 words", active: false },
-            { name: "Reconsider — Studio",     desc: "Gentle redirect, 110 words", active: false },
-            { name: "Sunset Memo",             desc: "Graceful exit, 80 words", active: false },
-          ].map((t) => (
-            <li key={t.name} className={`group flex items-center justify-between gap-4 px-4 py-3 rounded-xl border transition-colors
-              ${t.active ? "border-amethyst/40 bg-lavender/60" : "border-border/60 bg-white/50 hover:bg-lavender/40"}`}>
-              <div>
-                <div className="text-sm font-serif text-obsidian">{t.name}</div>
-                <div className="text-[11px] text-muted-foreground">{t.desc}</div>
-              </div>
-              {t.active
-                ? <span className="text-[10px] tracking-couture uppercase text-amethyst">In use</span>
-                : <button className="text-[10px] tracking-couture uppercase text-muted-foreground hover:text-amethyst">Activate</button>}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
-};
-
-/* ====================== Template Architect ====================== */
-
-const DEFAULT_TEMPLATE = `# Aura Brief — {{date}}
-
-**Verdict:** {{verdict}}  
-**Aura Alignment:** {{index}} / 100
-
-> "{{tagline}}"
-
-## Three things you should know
-1. {{bullet_one}}
-2. {{bullet_two}}
-3. {{bullet_three}}
-
-— *Curated for {{recipient}}*`;
-
-const TemplateArchitect = () => {
-  const [src, setSrc] = useState(DEFAULT_TEMPLATE);
-
-  const preview = useMemo(() =>
-    src
-      .replace(/{{date}}/g, "30 April 2026")
-      .replace(/{{verdict}}/g, "Greenlight")
-      .replace(/{{index}}/g, "87")
-      .replace(/{{tagline}}/g, "Soft armour, dawn light.")
-      .replace(/{{bullet_one}}/g, "Concept resonates with The Etherealists (+0.71).")
-      .replace(/{{bullet_two}}/g, "Shift palette toward dawn-lavender.")
-      .replace(/{{bullet_three}}/g, "Pair with podcast adjacencies (+0.62).")
-      .replace(/{{recipient}}/g, "Eloise Marchetti")
-  , [src]);
-
-  return (
-    <div className="grid lg:grid-cols-2 gap-6 fade-up">
-      <div className="rounded-2xl border-iridescent bg-white/80 shadow-ethereal p-6 flex flex-col">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-[10px] tracking-couture uppercase text-amethyst flex items-center gap-2">
-              <FileCode2 className="h-3 w-3" /> Template Architect
-            </div>
-            <h3 className="font-serif text-2xl text-obsidian mt-1">Author the voice.</h3>
-            <p className="text-xs text-muted-foreground mt-1">Markdown or HTML · merge tags in <span className="font-data">{"{{double_braces}}"}</span></p>
-          </div>
-          <button className="px-4 py-2 rounded-full bg-obsidian text-white text-[10px] tracking-couture uppercase hover:bg-amethyst transition-colors">Save Template</button>
-        </div>
-
-        <Textarea
-          value={src}
-          onChange={(e) => setSrc(e.target.value)}
-          rows={18}
-          spellCheck={false}
-          className="mt-5 flex-1 resize-none bg-lavender/40 border-border/60 font-data text-xs leading-relaxed text-obsidian focus-visible:ring-amethyst/40"
-        />
-      </div>
-
-      <div className="rounded-2xl border-iridescent bg-white/80 shadow-ethereal overflow-hidden flex flex-col">
-        <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Eye className="h-3.5 w-3.5 text-amethyst" />
-            <span className="text-[10px] tracking-couture uppercase text-amethyst">Live Preview</span>
-          </div>
-          <span className="text-[10px] tracking-couture uppercase text-muted-foreground">rendered with sample data</span>
-        </div>
-        <pre className="flex-1 p-7 overflow-auto whitespace-pre-wrap font-serif text-obsidian text-sm leading-relaxed bg-gradient-iridescent/40">
-{preview}
-        </pre>
       </div>
     </div>
   );
@@ -808,22 +857,99 @@ const VerdictPill = ({ v }: { v: KnowledgeVerdict }) => {
 
 const DEFAULT_CLUSTERS: MapCluster[] = [
   { cluster_id: "fallback_001", label: "The Etherealists", style_tribe: "The Etherealists", records: 0, share: 0.34, dominant_verdict: "Greenlight", x: 28, y: 42, depth: 1.0, node_count: 16, color: "#10B981" },
-  { cluster_id: "fallback_002", label: "Grounded Visionaries", style_tribe: "Grounded Visionaries", records: 0, share: 0.28, dominant_verdict: "Develop", x: 64, y: 36, depth: 0.75, node_count: 14, color: "#F59E0B" },
+  { cluster_id: "fallback_002", label: "Grounded Visionaries", style_tribe: "Grounded Visionaries", records: 0, share: 0.28, dominant_verdict: "Develop", x: 64, y: 36, depth: 0.75, node_count: 14, color: "#7C3AED" },
   { cluster_id: "fallback_003", label: "Studio Ceramicists", style_tribe: "Studio Ceramicists", records: 0, share: 0.2, dominant_verdict: "Reconsider", x: 50, y: 72, depth: 0.85, node_count: 12, color: "#F43F5E" },
 ];
 
-const Leiden3DGraph = ({ clusters: backendClusters }: { clusters: MapCluster[] }) => {
-  const clusters = backendClusters.length ? backendClusters : DEFAULT_CLUSTERS;
+const CLUSTER_PALETTE = [
+  "#10B981",
+  "#7C3AED",
+  "#0EA5E9",
+  "#F43F5E",
+  "#14B8A6",
+  "#8B5CF6",
+  "#F59E0B",
+  "#6366F1",
+];
 
-  const nodes = clusters.flatMap((c, ci) =>
+const clusterColor = (cluster: MapCluster, index: number) =>
+  CLUSTER_PALETTE[index % CLUSTER_PALETTE.length] || cluster.color || "#7C3AED";
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const audienceSegmentLabel = (cluster: MapCluster) =>
+  (cluster.style_tribe || cluster.label).replace(/^the\s+/i, "");
+
+const Leiden3DGraph = ({
+  clusters: backendClusters,
+  selectedClusterId,
+  onSelect,
+}: {
+  clusters: MapCluster[];
+  selectedClusterId?: string;
+  onSelect: (cluster: MapCluster) => void;
+}) => {
+  const clusters = backendClusters.length ? backendClusters : DEFAULT_CLUSTERS;
+  const [hoveredClusterId, setHoveredClusterId] = useState<string | null>(null);
+  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
+  const [drag, setDrag] = useState<{ clusterId: string; dx: number; dy: number } | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
+  useEffect(() => {
+    setPositions((current) => {
+      const next: Record<string, { x: number; y: number }> = {};
+      clusters.forEach((cluster) => {
+        next[cluster.cluster_id] = current[cluster.cluster_id] || { x: cluster.x, y: cluster.y };
+      });
+      return next;
+    });
+  }, [clusters]);
+
+  const plottedClusters = clusters.map((cluster, index) => ({
+    ...cluster,
+    color: clusterColor(cluster, index),
+    x: positions[cluster.cluster_id]?.x ?? cluster.x,
+    y: positions[cluster.cluster_id]?.y ?? cluster.y,
+  }));
+
+  const pointerPoint = (event: ReactPointerEvent<SVGSVGElement | SVGGElement>) => {
+    const svg = svgRef.current;
+    if (!svg) return { x: 0, y: 0 };
+    const rect = svg.getBoundingClientRect();
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * 100,
+      y: ((event.clientY - rect.top) / rect.height) * 100,
+    };
+  };
+
+  const startDrag = (event: ReactPointerEvent<SVGGElement>, cluster: MapCluster) => {
+    event.preventDefault();
+    onSelect(cluster);
+    const point = pointerPoint(event);
+    setDrag({ clusterId: cluster.cluster_id, dx: cluster.x - point.x, dy: cluster.y - point.y });
+  };
+
+  const moveDrag = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (!drag) return;
+    const point = pointerPoint(event);
+    setPositions((current) => ({
+      ...current,
+      [drag.clusterId]: {
+        x: clamp(point.x + drag.dx, 12, 88),
+        y: clamp(point.y + drag.dy, 18, 82),
+      },
+    }));
+  };
+
+  const nodes = plottedClusters.flatMap((c, ci) =>
     Array.from({ length: Math.max(6, Math.min(c.node_count || 12, 28)) }).map((_, i) => {
       const count = Math.max(1, c.node_count || 12);
       const angle = (i / count) * Math.PI * 2 + ci;
-      const r = 7 + (i % 4) * 2.1;
+      const r = 6.5 + (i % 4) * 1.55;
       const x = c.x + Math.cos(angle) * r * c.depth;
       const y = c.y + Math.sin(angle) * r * c.depth * 0.7;
-      const size = 0.75 + (Math.sin(i + ci) + 1) * 0.55 * c.depth;
-      return { x, y, size, color: c.color, ci };
+      const size = 0.58 + (Math.sin(i + ci) + 1) * 0.42 * c.depth;
+      return { x, y, size, color: c.color, ci, clusterId: c.cluster_id };
     })
   );
 
@@ -835,44 +961,128 @@ const Leiden3DGraph = ({ clusters: backendClusters }: { clusters: MapCluster[] }
       edges.push([i, j]);
     }
   }
-  for (let i = 0; i < clusters.length - 1; i++) {
+  for (let i = 0; i < plottedClusters.length - 1; i++) {
     const source = nodes.findIndex((node) => node.ci === i);
     const target = nodes.findIndex((node) => node.ci === i + 1);
     if (source >= 0 && target >= 0) edges.push([source, target]);
   }
 
   return (
-    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
+    <svg
+      ref={svgRef}
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      className={`w-full h-full ${drag ? "cursor-grabbing" : "cursor-default"}`}
+      onPointerMove={moveDrag}
+      onPointerUp={() => setDrag(null)}
+      onPointerLeave={() => setDrag(null)}
+    >
       <defs>
-        <filter id="g3dGlow"><feGaussianBlur stdDeviation="0.6" /></filter>
+        <filter id="premiumGlow"><feGaussianBlur stdDeviation="1.2" /></filter>
+        <pattern id="signalGrid" width="10" height="10" patternUnits="userSpaceOnUse">
+          <path d="M 10 0 L 0 0 0 10" fill="none" stroke="hsl(252 60% 88%)" strokeOpacity="0.18" strokeWidth="0.08" />
+        </pattern>
       </defs>
 
-      {clusters.map((c, i) => (
-        <ellipse key={c.cluster_id || i} cx={c.x} cy={c.y} rx={16 * c.depth} ry={11 * c.depth}
-          fill={c.color}
-          opacity="0.18"
-          filter="url(#g3dGlow)"
-        />
+      <rect x="0" y="0" width="100" height="100" fill="url(#signalGrid)" />
+      <path d="M8 74 C30 60 37 83 52 58 S75 38 92 31" fill="none" stroke="hsl(160 84% 39%)" strokeOpacity="0.12" strokeWidth="0.35" />
+      <path d="M12 35 C32 26 43 48 59 35 S78 20 91 44" fill="none" stroke="hsl(262 83% 58%)" strokeOpacity="0.10" strokeWidth="0.35" />
+
+      {plottedClusters.map((c, i) => (
+        <g
+          key={c.cluster_id || i}
+          className="cursor-grab active:cursor-grabbing"
+          role="button"
+          tabIndex={0}
+          aria-label={`Drag or select ${c.label} cluster`}
+          onPointerDown={(event) => startDrag(event, c)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") onSelect(c);
+          }}
+          onMouseEnter={() => setHoveredClusterId(c.cluster_id)}
+          onMouseLeave={() => setHoveredClusterId(null)}
+        >
+          <ellipse
+            cx={c.x}
+            cy={c.y}
+            rx={(selectedClusterId === c.cluster_id ? 19 : 16) * c.depth}
+            ry={(selectedClusterId === c.cluster_id ? 13 : 11) * c.depth}
+            fill={c.color}
+            opacity={selectedClusterId === c.cluster_id || hoveredClusterId === c.cluster_id ? "0.16" : "0.08"}
+            filter="url(#premiumGlow)"
+          />
+        </g>
       ))}
 
       {edges.map(([a, b], i) => {
         const n1 = nodes[a], n2 = nodes[b];
         if (!n1 || !n2) return null;
-        return <line key={i} x1={n1.x} y1={n1.y} x2={n2.x} y2={n2.y} stroke="hsl(263 44% 42%)" strokeOpacity="0.18" strokeWidth="0.18" />;
+        const activeEdge = selectedClusterId && (n1.clusterId === selectedClusterId || n2.clusterId === selectedClusterId);
+        return (
+          <line
+            key={i}
+            x1={n1.x}
+            y1={n1.y}
+            x2={n2.x}
+            y2={n2.y}
+            stroke={activeEdge ? "hsl(160 84% 39%)" : "hsl(263 44% 42%)"}
+            strokeOpacity={activeEdge ? "0.34" : "0.12"}
+            strokeWidth={activeEdge ? "0.24" : "0.12"}
+          />
+        );
       })}
 
       {nodes.map((n, i) => (
-        <g key={i}>
-          <circle cx={n.x} cy={n.y} r={n.size + 1.6} fill={n.color} opacity="0.16" />
-          <circle cx={n.x} cy={n.y} r={n.size} fill={n.color} stroke="hsl(252 100% 98%)" strokeWidth="0.18" />
+        <g
+          key={i}
+          className="cursor-pointer"
+          onClick={() => {
+            const cluster = plottedClusters.find((candidate) => candidate.cluster_id === n.clusterId);
+            if (cluster) onSelect(cluster);
+          }}
+          onMouseEnter={() => setHoveredClusterId(n.clusterId)}
+          onMouseLeave={() => setHoveredClusterId(null)}
+        >
+          <circle
+            cx={n.x}
+            cy={n.y}
+            r={n.size + (selectedClusterId === n.clusterId ? 1.9 : 1.1)}
+            fill={n.color}
+            opacity={selectedClusterId === n.clusterId || hoveredClusterId === n.clusterId ? "0.18" : "0.08"}
+          />
+          <circle
+            cx={n.x}
+            cy={n.y}
+            r={selectedClusterId === n.clusterId ? n.size * 1.25 : n.size}
+            fill={n.color}
+            stroke="hsl(252 100% 98%)"
+            strokeWidth={selectedClusterId === n.clusterId ? "0.32" : "0.18"}
+            opacity={!selectedClusterId || selectedClusterId === n.clusterId ? "1" : "0.45"}
+          />
         </g>
       ))}
 
-      {clusters.map((c) => (
-        <text key={c.cluster_id || c.label} x={c.x} y={c.y - 13} fontSize="2" textAnchor="middle"
-              fill="hsl(257 44% 20%)" fontFamily="Playfair Display" fontStyle="italic">
-          {c.label}
-        </text>
+      {plottedClusters.map((c, ci) => (
+        <g
+          key={c.cluster_id || c.label}
+          className="cursor-grab active:cursor-grabbing"
+          onPointerDown={(event) => startDrag(event, c)}
+          onMouseEnter={() => setHoveredClusterId(c.cluster_id)}
+          onMouseLeave={() => setHoveredClusterId(null)}
+        >
+          <text
+            x={c.x}
+            y={c.y - 13}
+            fontSize={selectedClusterId === c.cluster_id ? "1.82" : "1.58"}
+            textAnchor="middle"
+            fill={selectedClusterId === c.cluster_id ? "hsl(160 84% 28%)" : "hsl(257 44% 20%)"}
+            fontFamily="JetBrains Mono"
+            fontWeight={selectedClusterId === c.cluster_id ? "600" : "500"}
+            letterSpacing="0.18em"
+          >
+            {`AUD ${ci + 1} · ${audienceSegmentLabel(c).toUpperCase()}`}
+          </text>
+        </g>
       ))}
     </svg>
   );

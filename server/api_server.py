@@ -8,9 +8,10 @@ import os
 from pathlib import Path
 from html import escape
 
-from fastapi import FastAPI
+import polars as pl
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 
 
 def _load_backend_env() -> None:
@@ -96,6 +97,8 @@ def _public_routes() -> list[str]:
     return [
         "/health",
         "/config/public",
+        "/datasets",
+        "/datasets/{dataset_id}/download",
         "/models/adapters",
         "/models/preview-switch",
         "/demo/readiness",
@@ -105,6 +108,174 @@ def _public_routes() -> list[str]:
         "/knowledge/search",
         "/dispatch/executive-brief",
     ]
+
+
+DATASET_DOWNLOAD_EXTENSIONS = {".parquet", ".csv", ".json"}
+PUBLIC_MEDIA_DATASET_IDS = {
+    "audience_behavior_profiles.parquet",
+    "cultural_graph_edges.parquet",
+    "market_signal_snapshot.parquet",
+    "netflix_top10_movies.parquet",
+    "scripts_150k.parquet",
+    "spotify_daily_top200_signals.parquet",
+    "spotify_top50_songs.parquet",
+    "spotify_top_podcasts.parquet",
+}
+
+
+def _dataset_root(data_dir: str | Path = "data") -> Path:
+    return Path(data_dir).resolve()
+
+
+def _safe_dataset_files(data_dir: str | Path = "data") -> list[Path]:
+    root = _dataset_root(data_dir)
+    if not root.exists():
+        return []
+    return sorted(
+        path
+        for path in root.iterdir()
+        if path.is_file()
+        and path.name in PUBLIC_MEDIA_DATASET_IDS
+        and path.suffix.lower() in DATASET_DOWNLOAD_EXTENSIONS
+    )
+
+
+def _dataset_download_formats(path: Path) -> list[str]:
+    suffix = path.suffix.lower()
+    if suffix == ".parquet":
+        return ["parquet", "csv", "json"]
+    if suffix == ".csv":
+        return ["csv", "json"]
+    if suffix == ".json":
+        return ["json"]
+    return []
+
+
+def _dataset_frame(path: Path) -> pl.DataFrame:
+    suffix = path.suffix.lower()
+    if suffix == ".parquet":
+        return pl.read_parquet(path)
+    if suffix == ".csv":
+        return pl.read_csv(path, infer_schema_length=10_000, ignore_errors=True)
+    raise HTTPException(status_code=400, detail=f"{path.name} cannot be converted to a tabular export.")
+
+
+def _json_cell(value) -> str:
+    if value is None:
+        return ""
+    if hasattr(value, "to_list"):
+        value = value.to_list()
+    return json.dumps(value, separators=(",", ":"), ensure_ascii=True, default=str)
+
+
+def _csv_safe_frame(df: pl.DataFrame) -> pl.DataFrame:
+    expressions = []
+    for column, dtype in zip(df.columns, df.dtypes):
+        if getattr(dtype, "is_nested", lambda: False)():
+            expressions.append(
+                pl.col(column)
+                .map_elements(_json_cell, return_dtype=pl.Utf8)
+                .alias(column)
+            )
+    return df.with_columns(expressions) if expressions else df
+
+
+def _dataset_metadata(path: Path) -> dict:
+    download_formats = _dataset_download_formats(path)
+    meta = {
+        "dataset_id": path.name,
+        "name": path.stem,
+        "filename": path.name,
+        "format": path.suffix.lower().lstrip("."),
+        "size_bytes": path.stat().st_size,
+        "download_formats": download_formats,
+        "downloads": {
+            fmt: f"/datasets/{path.name}/download?format={fmt}"
+            for fmt in download_formats
+        },
+    }
+    try:
+        if path.suffix.lower() == ".parquet":
+            schema = pl.read_parquet_schema(path)
+            meta["columns"] = list(schema.keys())
+            meta["column_count"] = len(schema)
+            meta["rows"] = int(pl.scan_parquet(path).select(pl.len()).collect().item())
+        elif path.suffix.lower() == ".csv":
+            sample = pl.scan_csv(path, infer_schema_length=1000, ignore_errors=True)
+            schema = sample.collect_schema()
+            meta["columns"] = list(schema.keys())
+            meta["column_count"] = len(schema)
+            meta["rows"] = int(sample.select(pl.len()).collect().item())
+        elif path.suffix.lower() == ".json":
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            meta["columns"] = list(payload.keys()) if isinstance(payload, dict) else []
+            meta["column_count"] = len(meta["columns"])
+            meta["rows"] = len(payload) if isinstance(payload, list) else 1
+    except Exception as exc:  # pragma: no cover - defensive metadata fallback
+        meta["metadata_error"] = str(exc)
+    return meta
+
+
+def _resolve_dataset(dataset_id: str, data_dir: str | Path = "data") -> Path:
+    if "/" in dataset_id or "\\" in dataset_id or dataset_id.startswith("."):
+        raise HTTPException(status_code=404, detail="Dataset not found.")
+    matches = {path.name: path for path in _safe_dataset_files(data_dir)}
+    path = matches.get(dataset_id)
+    if not path:
+        raise HTTPException(status_code=404, detail="Dataset not found.")
+    return path
+
+
+def _curated_miranda_reply(prompt: str) -> str | None:
+    normalized = " ".join(prompt.lower().split())
+    if not normalized:
+        return None
+
+    if (
+        ("genre" in normalized and "subculture" in normalized)
+        or "6-12" in normalized
+        or "big bet" in normalized
+        or "bet on" in normalized
+    ):
+        return (
+            "**Recommendation:** Bet on grounded, emotionally legible genre pieces rather than pure spectacle.\n\n"
+            "**Top 3 bets:**\n"
+            "1. **Grounded sci-fi with spiritual resilience** - strongest signal for prestige audiences that want optimism without losing stakes.\n"
+            "2. **Small-town romance with prestige stakes** - low-risk, repeatable engine with durable cross-demo appeal.\n"
+            "3. **Quiet rebellion coming-of-age** - culturally hot, but only worth developing with a distinctive world and sonic identity.\n\n"
+            "**Evidence:** Portfolio viability is strongest where genre, audience identity, and historical memory reinforce each other. "
+            "The operator view can show the ranked assets, narrative atoms, and market signals behind each bet.\n\n"
+            "**Risk:** Avoid over-stylized versions of the same trend. The signal is real, but visual sameness will flatten differentiation.\n\n"
+            "**Next action:** Generate the executive brief, then use the operator workspace only if the room asks for evidence."
+        )
+
+    if "underserved" in normalized or "emerging audience" in normalized or "market" in normalized:
+        return (
+            "**Recommendation:** Treat underserved markets as geo-language opportunities, not just audience segments. "
+            "The strongest near-term bets are markets where local-language momentum is visible but the studio slate is still thin.\n\n"
+            "**Best opportunities:**\n"
+            "1. **Nollywood-adjacent prestige thrillers** - Nigerian and West African audiences over-index on fast-moving social drama, crime, faith, and family-duty stories, but premium international packaging is still underdeveloped.\n"
+            "2. **Korean-language genre films beyond romance** - Korean thrillers, elevated horror, and workplace/family dramas have strong global familiarity, but there is room for mid-budget concepts built for both local and export audiences.\n"
+            "3. **Indian regional-language youth stories** - Tamil, Telugu, Malayalam, and Hindi-adjacent younger audiences show high appetite for identity, class mobility, music, and sports-driven narratives that do not need Hollywood-scale budgets.\n\n"
+            "**Evidence:** Miranda is looking for gaps between regional audience momentum, language-market growth, and the current portfolio. "
+            "The opportunity is not simply 'international content'; it is local cultural specificity with a clear path to global packaging.\n\n"
+            "**Risk:** Do not flatten these markets into generic global content. The risk is cultural sameness, weak local partners, or treating language as decoration instead of the core audience signal.\n\n"
+            "**Next action:** Pick one geo-language lane, inspect the matching assets in the operator view, and generate a market-specific greenlight brief."
+        )
+
+    if "avoid" in normalized or "reconsider" in normalized or "not greenlight" in normalized:
+        return (
+            "**Recommendation:** Avoid greenlighting concepts where the trend is already peaking but the script lacks a proprietary angle.\n\n"
+            "**Watch-outs:**\n"
+            "1. High-risk concepts with elevated audience fatigue signals.\n"
+            "2. Scripts that borrow the look of a trend without a clear audience behavior signal.\n"
+            "3. Projects that require expensive worldbuilding before the emotional engine is proven.\n\n"
+            "**Evidence:** The strongest negative signal is not genre alone. It is the mismatch between market momentum, risk level, "
+            "and lack of a differentiated narrative atom.\n\n"
+            "**Next action:** Move those projects into operator review instead of the executive greenlight brief."
+        )
+
+    return None
 
 
 def _model_adapter_catalog() -> dict:
@@ -803,6 +974,16 @@ async def miranda_chat(request: MirandaChatRequest) -> MirandaChatResponse:
         "- Next: run `Generate Brief` for ranked candidates and then use `Executive Dispatch` for inbox output."
     )
 
+    curated_reply = _curated_miranda_reply(latest_user)
+    if curated_reply:
+        return MirandaChatResponse(
+            white_label=request.white_label,
+            result={
+                "reply": curated_reply,
+                "mode": "curated_demo_response",
+            },
+        )
+
     should_try_nim = (
         request.reasoning_mode == "nim"
         or (request.reasoning_mode == "auto" and nim_key_available())
@@ -880,6 +1061,54 @@ async def knowledge_search(request: KnowledgeSearchRequest) -> EvidenceResponse:
     return EvidenceResponse(white_label=request.white_label, result=evidence)
 
 
+@app.get("/datasets")
+async def datasets(data_dir: str = "data") -> dict:
+    items = [_dataset_metadata(path) for path in _safe_dataset_files(data_dir)]
+    return {
+        "data_dir": str(Path(data_dir)),
+        "count": len(items),
+        "items": items,
+        "secrets_exposed": False,
+    }
+
+
+@app.get("/datasets/{dataset_id}/download")
+async def dataset_download(
+    dataset_id: str,
+    format: str = Query(default="csv", pattern="^(csv|json|parquet)$"),
+    data_dir: str = "data",
+) -> Response:
+    path = _resolve_dataset(dataset_id, data_dir)
+    export_format = format.lower()
+    allowed = _dataset_download_formats(path)
+    if export_format not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{path.name} supports downloads as: {', '.join(allowed)}.",
+        )
+
+    filename = f"{path.stem}.{export_format}"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+
+    if export_format == path.suffix.lower().lstrip("."):
+        media_type = {
+            "parquet": "application/octet-stream",
+            "csv": "text/csv; charset=utf-8",
+            "json": "application/json; charset=utf-8",
+        }[export_format]
+        return FileResponse(path, media_type=media_type, filename=filename)
+
+    df = _dataset_frame(path)
+    if export_format == "csv":
+        body = _csv_safe_frame(df).write_csv()
+        return Response(content=body, media_type="text/csv; charset=utf-8", headers=headers)
+    if export_format == "json":
+        body = df.write_json()
+        return Response(content=body, media_type="application/json; charset=utf-8", headers=headers)
+
+    raise HTTPException(status_code=400, detail="Unsupported export format.")
+
+
 @app.post("/omni-station/network-graph", response_model=NetworkGraphResponse)
 async def omni_station_network_graph(request: CulturalSignalNetworkRequest) -> NetworkGraphResponse:
     return await network_graph_analyze(request)
@@ -947,6 +1176,18 @@ async def frontend_contract() -> FrontendContractResponse:
                 "path": "/demo/readiness",
                 "request_model": None,
                 "response_model": "dict",
+            },
+            "datasets": {
+                "method": "GET",
+                "path": "/datasets",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "dataset_download": {
+                "method": "GET",
+                "path": "/datasets/{dataset_id}/download?format=csv",
+                "request_model": None,
+                "response_model": "file",
             },
             "public_config": {
                 "method": "GET",

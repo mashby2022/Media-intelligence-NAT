@@ -4,10 +4,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Aura Intelligence — Ethereal high-fashion design system. All colors HSL. */
+/* Aura Intelligence — lavender, mint, and white enterprise design system. All colors HSL. */
 @layer base {
   :root {
-    /* Ethereal palette */
+    /* Core palette */
     --background: 252 100% 98%;          /* #F5F3FF lavender mist */
     --foreground: 257 44% 20%;           /* deep amethyst-obsidian */
 
@@ -45,17 +45,22 @@
     --periwinkle-soft: 213 94% 86%;
     --amethyst: 262 83% 58%;             /* #7C3AED */
     --amethyst-soft: 262 83% 76%;
+    --mint: 156 73% 96%;                 /* #ECFDF5 */
+    --mint-deep: 160 84% 39%;            /* #10B981 */
+    --mint-soft: 158 64% 82%;
     --sky: 199 95% 94%;
     --sky-deep: 205 80% 80%;
     --obsidian: 257 44% 14%;
     --silver: 240 15% 88%;
 
-    /* Iridescent gradients */
-    --gradient-iridescent: linear-gradient(135deg, hsl(252 100% 96%), hsl(213 94% 94%) 35%, hsl(262 83% 92%) 70%, hsl(213 94% 88%));
-    --gradient-amethyst: linear-gradient(135deg, hsl(262 83% 76%), hsl(262 83% 50%));
-    --gradient-pulse: radial-gradient(circle at 30% 30%, hsl(213 94% 88%), hsl(262 83% 80%) 50%, hsl(199 95% 92%));
-    --gradient-silver: linear-gradient(135deg, hsl(240 30% 96%), hsl(252 50% 90%) 50%, hsl(199 60% 92%));
-    --border-iridescent: linear-gradient(135deg, hsl(252 80% 88% / 0.8), hsl(199 80% 88% / 0.6), hsl(280 70% 88% / 0.8));
+    /* Lavender, mint, and white gradients */
+    --gradient-iridescent: linear-gradient(135deg, hsl(252 100% 97%), hsl(156 73% 96%) 42%, hsl(262 83% 94%) 76%, hsl(0 0% 100%));
+    --gradient-amethyst: linear-gradient(135deg, hsl(262 83% 74%), hsl(262 83% 52%));
+    --gradient-aura: linear-gradient(135deg, hsl(262 83% 66%), hsl(160 84% 39%));
+    --gradient-mint: linear-gradient(135deg, hsl(156 73% 96%), hsl(0 0% 100%) 48%, hsl(252 100% 97%));
+    --gradient-pulse: radial-gradient(circle at 30% 30%, hsl(156 73% 92%), hsl(262 83% 86%) 52%, hsl(0 0% 100%));
+    --gradient-silver: linear-gradient(135deg, hsl(0 0% 100%), hsl(252 50% 94%) 50%, hsl(156 55% 94%));
+    --border-iridescent: linear-gradient(135deg, hsl(252 80% 88% / 0.8), hsl(160 84% 82% / 0.7), hsl(280 70% 90% / 0.8));
 
     --shadow-ethereal: 0 1px 0 hsl(252 60% 92% / 0.6), 0 30px 80px -30px hsl(263 44% 42% / 0.18);
     --shadow-halo: 0 0 0 1px hsl(263 60% 80% / 0.5), 0 0 28px hsl(263 60% 75% / 0.45);
@@ -110,13 +115,13 @@
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, sans-serif;
     background-image:
-      radial-gradient(1200px 600px at 10% -10%, hsl(199 95% 94% / 0.6), transparent 60%),
-      radial-gradient(900px 500px at 110% 10%, hsl(263 60% 90% / 0.55), transparent 60%),
+      radial-gradient(1200px 600px at 10% -10%, hsl(156 73% 94% / 0.65), transparent 60%),
+      radial-gradient(900px 500px at 110% 10%, hsl(263 60% 91% / 0.58), transparent 60%),
       radial-gradient(800px 700px at 50% 110%, hsl(252 80% 92% / 0.5), transparent 60%);
     background-attachment: fixed;
   }
 
-  h1, h2, h3, .font-serif {
+  h1, h2, h3 {
     font-family: 'Playfair Display', Georgia, serif;
     letter-spacing: -0.015em;
     font-weight: 500;
@@ -131,14 +136,18 @@
 
 @layer utilities {
   .text-amethyst { color: hsl(var(--amethyst)); }
+  .text-mint-deep { color: hsl(var(--mint-deep)); }
   .text-periwinkle { color: hsl(var(--periwinkle)); }
   .bg-periwinkle { background-color: hsl(var(--periwinkle)); }
   .text-obsidian { color: hsl(var(--obsidian)); }
   .bg-lavender { background-color: hsl(var(--lavender)); }
+  .bg-mint { background-color: hsl(var(--mint)); }
   .bg-sky-pale { background-color: hsl(var(--sky)); }
   .bg-amethyst { background-color: hsl(var(--amethyst)); }
   .bg-gradient-iridescent { background-image: var(--gradient-iridescent); }
   .bg-gradient-amethyst { background-image: var(--gradient-amethyst); }
+  .bg-gradient-aura { background-image: var(--gradient-aura); }
+  .bg-gradient-mint { background-image: var(--gradient-mint); }
   .bg-gradient-silver { background-image: var(--gradient-silver); }
   .bg-gradient-pulse { background-image: var(--gradient-pulse); }
   .shadow-ethereal { box-shadow: var(--shadow-ethereal); }

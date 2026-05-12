@@ -21,7 +21,7 @@ const AuraLayout = () => {
   const [phaseCount, setPhaseCount] = useState("0/4");
 
   useEffect(() => {
-    document.title = "Aura Intelligence — Amethyst Precision Chic";
+    document.title = `${mieClient.config.brand} — Executive Briefing Agent`;
     const desc = document.querySelector('meta[name="description"]');
     const content =
       "Aura Intelligence: a NAT-orchestrated executive briefing agent and operator evidence surface powered by Nemotron reasoning, Polars processing, and optional RAPIDS acceleration.";
@@ -75,13 +75,13 @@ const AuraLayout = () => {
       <AuraSidebar />
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Persona toggle — clear Executive vs Operator switch */}
-        <div className="px-10 pt-6 pb-0 flex items-center justify-between gap-4 border-b border-border/40">
+        <div className="px-10 pt-6 pb-0 flex items-center justify-between gap-4 border-b border-emerald-200/40 bg-white/35 backdrop-blur-sm">
           <div className="flex items-center gap-3 text-[10px] tracking-couture uppercase text-muted-foreground">
             <span className="hidden sm:inline">Viewing as</span>
             <PersonaToggle persona={persona} onChange={switchPersona} />
           </div>
           <div className="hidden md:flex items-center gap-2 text-[10px] tracking-couture uppercase text-muted-foreground">
-            <span className="h-1.5 w-1.5 rounded-full bg-amethyst halo-pulse" />
+            <span className="h-1.5 w-1.5 rounded-full bg-mint-deep halo-pulse" />
             <span>{persona === "executive" ? "In-Box Mode" : "Quant Mode"}</span>
           </div>
         </div>
@@ -92,7 +92,7 @@ const AuraLayout = () => {
         </div>
 
         {/* Technical Status Bar */}
-        <footer className="border-t border-border/60 bg-white/60 backdrop-blur-md">
+        <footer className="border-t border-emerald-200/50 bg-white/70 backdrop-blur-md">
           <div className="px-10 py-2.5 flex flex-wrap items-center justify-between gap-3 text-[10px] tracking-couture uppercase text-muted-foreground">
             <div className="flex items-center gap-5">
               <span className="inline-flex items-center gap-2">
@@ -115,10 +115,10 @@ const AuraLayout = () => {
                 <span className="font-mono normal-case tracking-normal text-obsidian">{phaseCount} phases</span>
               </span>
             </div>
-            <span className="italic font-serif normal-case tracking-normal text-obsidian/70 hidden sm:block">
-              "Agentic briefing workflow, grounded in auditable portfolio evidence."
+            <span className="font-sans normal-case tracking-normal text-obsidian/70 hidden sm:block">
+              Agentic briefing workflow grounded in auditable portfolio evidence.
             </span>
-            <span className="text-amethyst">© MMXXVI</span>
+            <span className="text-mint-deep">© MMXXVI</span>
           </div>
         </footer>
       </div>

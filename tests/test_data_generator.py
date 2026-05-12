@@ -377,6 +377,8 @@ def test_operator_workspace_api_route(tmp_path: Path) -> None:
     assert "market_signals" in contract_response.json()["routes"]
     assert "knowledge_search" in contract_response.json()["routes"]
     assert "gpu_demo_status" in contract_response.json()["routes"]
+    assert "datasets" in contract_response.json()["routes"]
+    assert "dataset_download" in contract_response.json()["routes"]
     assert "autonomous_intake" in contract_response.json()["routes"]
     assert "insight_run_stream" in contract_response.json()["routes"]
     assert "demo_readiness" in contract_response.json()["routes"]
@@ -479,6 +481,9 @@ def test_persona_api_contracts() -> None:
         },
     )
     tools_response = client.get("/orchestrator/tools")
+    datasets_response = client.get("/datasets")
+    dataset_csv_response = client.get("/datasets/scripts_150k.parquet/download?format=csv")
+    dataset_json_response = client.get("/datasets/scripts_150k.parquet/download?format=json")
 
     assert brief_response.status_code == 200
     assert brief_response.json()["white_label"]["brand_name"] == "Test Brand"
@@ -502,6 +507,9 @@ def test_persona_api_contracts() -> None:
     assert workflow_response.status_code == 200
     assert dispatch_response.status_code == 200
     assert tools_response.status_code == 200
+    assert datasets_response.status_code == 200
+    assert dataset_csv_response.status_code == 200
+    assert dataset_json_response.status_code == 200
     assert network_response.json()["result"]["evidence_type"] == "cultural_signal_network"
     assert market_response.json()["result"]["evidence_type"] == "market_signal_snapshot"
     assert knowledge_response.json()["result"]["evidence_type"] == "living_knowledge_search"
@@ -537,7 +545,56 @@ def test_persona_api_contracts() -> None:
     assert "Greenlight Brief" in dispatch_response.json()["result"]["subject"]
     assert tools_response.json()["orchestrator_profile"] == "miranda-compatible"
     assert len(tools_response.json()["liaison_core"]["tools"]) >= 3
+    assert datasets_response.json()["secrets_exposed"] is False
+    assert any(item["dataset_id"] == "scripts_150k.parquet" for item in datasets_response.json()["items"])
+    assert "script_id" in dataset_csv_response.text.splitlines()[0]
+    assert dataset_json_response.headers["content-type"].startswith("application/json")
     assert network_response.json()["result"]["graph_engine"]["compute_source"] in {
         "High-Performance Compute Cluster",
         "Standard Edge Node",
     }
+
+
+def test_miranda_canonical_demo_questions_are_curated() -> None:
+    pytest = __import__("pytest")
+    fastapi_testclient = pytest.importorskip("fastapi.testclient")
+    from server.api_server import app
+
+    client = fastapi_testclient.TestClient(app)
+    questions = {
+        "What genres and subcultures should we bet on in the next 6-12 months?": [
+            "Grounded sci-fi",
+            "Small-town romance",
+            "Risk",
+            "Next action",
+        ],
+        "Which emerging audience markets are underserved?": [
+            "Nollywood",
+            "Korean-language",
+            "Indian regional-language",
+            "Risk",
+            "Next action",
+        ],
+        "What should we avoid greenlighting right now?": [
+            "Avoid greenlighting",
+            "Watch-outs",
+            "Evidence",
+            "Next action",
+        ],
+    }
+
+    for question, expected_terms in questions.items():
+        response = client.post(
+            "/miranda/chat",
+            json={
+                "messages": [{"role": "user", "content": question}],
+                "reasoning_mode": "auto",
+                "reasoning_model": "nano",
+            },
+        )
+        payload = response.json()
+        reply = payload["result"]["reply"]
+        assert response.status_code == 200
+        assert payload["result"]["mode"] == "curated_demo_response"
+        assert len(reply) > 300
+        assert all(term in reply for term in expected_terms)
