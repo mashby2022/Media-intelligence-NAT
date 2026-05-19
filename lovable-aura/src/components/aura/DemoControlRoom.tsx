@@ -17,6 +17,7 @@ import {
   Route,
   ShieldCheck,
   Sparkles,
+  Terminal,
 } from "lucide-react";
 import { mieClient, type DatasetInventoryResult, type DemoReadinessResult, type DemoWorkflowRunResult, type HealthResult, type PublicConfigResult } from "@/lib/mieClient";
 
@@ -47,7 +48,7 @@ const ARCHITECTURE_STEPS = [
   {
     label: "NAT Orchestration",
     path: "/",
-    talk: "NAT coordinates intake, tool calls, memory lookup, reasoning trace, operator handoff, and dispatch.",
+    talk: "The current workflow exposes a NAT-compatible boundary for intake, tool calls, memory lookup, reasoning trace, operator handoff, and dispatch-ready output.",
   },
   {
     label: "Nemotron Reasoning",
@@ -86,6 +87,55 @@ const MODEL_RATIONALE = [
     label: "RAPIDS",
     choice: "Optional acceleration",
     reason: "Shows the enterprise acceleration path when GPU is available.",
+  },
+];
+
+const VAULT_USE_CASE_POINTS = [
+  {
+    label: "Vault Intake",
+    detail: "Scripts, treatments, pitch notes, performance history, and market signals enter as mixed studio evidence.",
+  },
+  {
+    label: "Agent Planning",
+    detail: "NeMo Agent Toolkit frames the question, selects tools, retrieves memory, and keeps the run observable.",
+  },
+  {
+    label: "Media Analytics",
+    detail: "Polars prepares portfolio evidence now; RAPIDS, cuVS, and cuGraph are the acceleration path for larger libraries.",
+  },
+  {
+    label: "Business Handoff",
+    detail: "The result becomes a greenlight brief, operator validation surface, and dispatch-ready artifact.",
+  },
+];
+
+const MODEL_COMPARISON = [
+  {
+    label: "Small",
+    model: "meta/llama3-8b-instruct",
+    fit: "Ad-hoc validation",
+    workload: "Fast operator checks, prompt tests, and low-risk follow-ups.",
+    tradeoff: "Lowest latency and cost; limited depth for executive synthesis.",
+    gpu: "A10G / L40S class",
+    telemetry: "Trace latency, tool count, prompt shape",
+  },
+  {
+    label: "Medium",
+    model: "nvidia/nemotron-4-340b-instruct",
+    fit: "Portfolio analysis",
+    workload: "Slate review, retrieval-heavy reasoning, and multi-tool evidence passes.",
+    tradeoff: "Balanced quality and throughput for the standard demo path.",
+    gpu: "H100 / A100 class",
+    telemetry: "Profile bottlenecks, throughput, evidence coverage",
+  },
+  {
+    label: "Large",
+    model: "meta/llama3-70b-instruct",
+    fit: "Executive synthesis",
+    workload: "Board-ready narrative, strategic tradeoffs, and high-stakes recommendations.",
+    tradeoff: "More reasoning depth; higher cost and stricter capacity planning.",
+    gpu: "H100 / B200 class",
+    telemetry: "Evaluate answer quality, risk posture, token efficiency",
   },
 ];
 
@@ -329,6 +379,38 @@ export function DemoControlRoom() {
       <div className="rounded-lg border border-border/70 bg-white/75 p-5 shadow-soft">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
           <div>
+            <h2 className="font-serif text-2xl text-obsidian">Vault AI / Media Analytics Use Case</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
+              The media wrapper is the demo surface. The reusable pattern is an agent that can move from messy
+              enterprise evidence to a governed recommendation, validation surface, and handoff artifact.
+            </p>
+          </div>
+          <span className="rounded-full bg-secondary px-3 py-1.5 text-[10px] tracking-couture uppercase text-muted-foreground">
+            reusable agent pattern
+          </span>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {VAULT_USE_CASE_POINTS.map((item) => (
+            <div key={item.label} className="rounded-md border border-border/70 bg-white/65 p-4">
+              <div className="text-[10px] tracking-couture uppercase text-amethyst">{item.label}</div>
+              <div className="mt-2 text-xs leading-5 text-muted-foreground">{item.detail}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50/70 p-4">
+          <div className="text-[10px] tracking-couture uppercase text-emerald-700">Talk Track</div>
+          <div className="mt-2 text-sm leading-6 text-obsidian">
+            This is not a deck generator. It is a NeMo Agent Toolkit orchestration demo: intake, tool calls,
+            memory, evidence packaging, model reasoning, operator review, and dispatch all stay visible.
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border/70 bg-white/75 p-5 shadow-soft">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+          <div>
             <h2 className="font-serif text-2xl text-obsidian">The Studio Problem: Insight Does Not Travel Cleanly</h2>
             <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
               Studios already have assets, audience data, and internal expertise. The gap is a repeatable
@@ -482,6 +564,57 @@ export function DemoControlRoom() {
               <div className="mt-2 text-sm font-medium text-obsidian">{step.label}</div>
               <div className="mt-1 text-[11px] leading-5 text-muted-foreground">{step.talk}</div>
             </Link>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border/70 bg-white/75 p-5 shadow-soft">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="font-serif text-2xl text-obsidian">Model Comparison</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
+              Mocked routing matrix inspired by the NeMo Agent Toolkit slides: choose the model profile by workload,
+              then use observability, profiling, evaluation, and GPU sizing to tune the agent system.
+            </p>
+          </div>
+          <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] tracking-couture uppercase text-emerald-700">
+            workload-aware routing
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-3">
+          {MODEL_COMPARISON.map((tier) => (
+            <div key={tier.label} className="rounded-lg border border-border/70 bg-white/65 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] tracking-couture uppercase text-amethyst">{tier.label}</div>
+                  <div className="mt-2 text-lg font-semibold text-obsidian">{tier.fit}</div>
+                </div>
+                <span className="rounded-full bg-secondary px-2.5 py-1 font-mono text-[10px] text-obsidian">
+                  {tier.gpu}
+                </span>
+              </div>
+
+              <div className="mt-4 rounded-md border border-border/60 bg-secondary/40 px-3 py-3">
+                <div className="text-[9px] tracking-couture uppercase text-muted-foreground">Model</div>
+                <div className="mt-1 font-mono text-xs leading-5 text-obsidian break-words">{tier.model}</div>
+              </div>
+
+              <div className="mt-4 grid gap-3">
+                <div>
+                  <div className="text-[10px] tracking-couture uppercase text-muted-foreground">Workload</div>
+                  <div className="mt-1 text-sm leading-6 text-obsidian">{tier.workload}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] tracking-couture uppercase text-muted-foreground">Tradeoff</div>
+                  <div className="mt-1 text-sm leading-6 text-muted-foreground">{tier.tradeoff}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] tracking-couture uppercase text-muted-foreground">NeMo Agent Toolkit Signal</div>
+                  <div className="mt-1 text-sm leading-6 text-muted-foreground">{tier.telemetry}</div>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       </div>
@@ -732,6 +865,25 @@ export function DemoControlRoom() {
               </div>
             </div>
 
+            <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50/70 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] tracking-couture uppercase text-emerald-700">Aura Intelligence System Handoff</div>
+                  <div className="mt-2 text-xs leading-5 text-emerald-900/75">
+                    Environment blueprint validation is represented as the next enterprise step: package the same
+                    NAT-compatible workflow for NVIDIA AI Workbench and provision a Brev GPU sandbox when the launch
+                    environment is available.
+                  </div>
+                </div>
+                <Terminal className="h-4 w-4 shrink-0 text-emerald-700" />
+              </div>
+              <div className="mt-3 rounded bg-obsidian px-3 py-2 font-mono text-[10px] leading-5 text-white/85">
+                blueprint: pending AI Workbench packaging<br />
+                sandbox: Brev launch target ready for customer URL<br />
+                assistant: NeMo RAG companion planned for technical walkthrough
+              </div>
+            </div>
+
             <div className="mt-3 rounded-md border border-border/70 bg-white/65 p-3">
               <div className="text-[10px] tracking-couture uppercase text-muted-foreground">Allowed Frontend Origins</div>
               <div className="mt-2 max-h-24 overflow-auto font-mono text-[10px] leading-5 text-muted-foreground">
@@ -810,7 +962,7 @@ export function DemoControlRoom() {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm text-obsidian">{event.label || event.step_id}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-[9px] tracking-couture uppercase ${event.status === "complete" || event.status === "sent" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-[9px] tracking-couture uppercase ${event.status === "complete" || event.status === "simulated_sent" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
                         {event.status || "running"}
                       </span>
                     </div>

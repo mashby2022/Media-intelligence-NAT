@@ -210,6 +210,12 @@ class MirandaChatResult(BaseModel):
     model: str | None = None
     latency_ms: float | None = None
     error: str | None = None
+    run_id: str | None = None
+    query_plan: dict[str, Any] | None = None
+    selected_agents: list[str] = Field(default_factory=list)
+    tools_used: list[str] = Field(default_factory=list)
+    missing_data: list[str] = Field(default_factory=list)
+    refinement_options: list[str] = Field(default_factory=list)
 
 
 class MirandaChatResponse(BaseModel):

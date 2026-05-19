@@ -24,7 +24,7 @@ const AuraLayout = () => {
     document.title = `${mieClient.config.brand} — Executive Briefing Agent`;
     const desc = document.querySelector('meta[name="description"]');
     const content =
-      "Aura Intelligence: a NAT-orchestrated executive briefing agent and operator evidence surface powered by Nemotron reasoning, Polars processing, and optional RAPIDS acceleration.";
+      "Aura Intelligence: a NAT-compatible executive briefing agent and operator evidence surface powered by Nemotron reasoning, Polars processing, and optional RAPIDS acceleration.";
     if (desc) desc.setAttribute("content", content);
     else {
       const m = document.createElement("meta");

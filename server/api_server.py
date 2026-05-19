@@ -7,6 +7,8 @@ import json
 import os
 from pathlib import Path
 from html import escape
+from time import perf_counter
+from typing import Any
 
 import polars as pl
 from fastapi import FastAPI, HTTPException, Query
@@ -43,9 +45,34 @@ from agent.tools import (
     search_living_knowledge,
     synthesize_evidence,
 )
+from agent.query_planner import plan_miranda_query
+from agent.orchestration import agent_catalog, agent_plan_for_use_case
+from agent.runtime import (
+    build_run_id,
+    get_run,
+    nat_status,
+    nat_tools,
+    observability_summary,
+    record_run,
+)
+from agent.use_cases import get_use_case, list_use_cases, use_case_readiness
 from agent.reasoning import DEFAULT_MODELS, NIM_BASE_URL, NIM_TIMEOUT_SEC, chat_with_nim, nim_key_available
 from engine.analytics import graph_engine_capabilities, workspace_evidence
 from engine.gpu_demo import gpu_demo_status
+from engine.input_analysis import analyze_input, enrich_title_payload, ip_scout_payload
+from engine.book_trend_ingestion import ingest_nyt_bestsellers
+from engine.ip_scouting import analyze_ip_scout, ip_scouting_signals
+from engine.launch_readiness import launch_readiness
+from engine.nemo_data_designer import generate_sdg_payload, sdg_schema_catalog, sdg_status
+from engine.prediction_builder import (
+    get_prediction_run,
+    prediction_builder_options,
+    prediction_comparison,
+    prediction_notes,
+    publish_prediction_run,
+    run_prediction_builder,
+)
+from engine.sdg_experiments import latest_sdg_evaluation, latest_sdg_experiment, run_control_vs_sdg_experiment
 from engine.visuals import accelerated_visual_capabilities, stand_up_cuxfilter_server, workspace_payload
 from server.models import (
     BriefResponse,
@@ -102,7 +129,39 @@ def _public_routes() -> list[str]:
         "/models/adapters",
         "/models/preview-switch",
         "/demo/readiness",
+        "/launch/readiness",
         "/demo/workflow-run",
+        "/use-cases",
+        "/use-cases/{use_case_id}/contract",
+        "/use-cases/{use_case_id}/readiness",
+        "/use-cases/{use_case_id}/run",
+        "/miranda/query",
+        "/nat/status",
+        "/nat/tools",
+        "/nat/runs/{run_id}/trace",
+        "/nat/runs/{run_id}/evaluation",
+        "/nat/runs/{run_id}/profile",
+        "/nat/observability",
+        "/agents/catalog",
+        "/agents/plan/{use_case_id}",
+        "/inputs/analyze",
+        "/inputs/enrich-title",
+        "/inputs/ip-scout",
+        "/sdg/status",
+        "/sdg/schemas",
+        "/sdg/generate",
+        "/sdg/experiments/control-vs-sdg",
+        "/sdg/experiments/latest",
+        "/sdg/experiments/latest/evaluation",
+        "/ip-scouting/signals",
+        "/ip-scouting/analyze",
+        "/ip-scouting/ingest/nyt-bestsellers",
+        "/prediction-builder/options",
+        "/prediction-builder/run",
+        "/prediction-builder/runs/{run_id}",
+        "/prediction-builder/runs/{run_id}/comparison",
+        "/prediction-builder/runs/{run_id}/notes",
+        "/prediction-builder/runs/{run_id}/publish",
         "/generate-brief",
         "/interactive-workspace",
         "/knowledge/search",
@@ -364,14 +423,17 @@ def _preview_model_switch_payload(request: ModelPreviewSwitchRequest) -> dict:
 
 def _architecture_positioning() -> dict:
     return {
-        "primary_story": "NAT-orchestrated executive briefing agent with Nemotron reasoning.",
+        "primary_story": "NAT-compatible executive briefing agent with Nemotron reasoning.",
         "secondary_story": "Polars processing with optional RAPIDS acceleration for high-volume evidence prep.",
-        "demo_boundary": "This mimics Vault AI workflow mechanics without attempting to reproduce proprietary predictive models.",
+        "demo_boundary": "This demonstrates customer workflow mechanics without attempting to reproduce proprietary predictive models.",
         "components": {
             "nat": {
-                "role": "Agentic workflow orchestration",
+                "role": "Agentic workflow orchestration boundary",
                 "foreground": True,
-                "demo_use": "Coordinates intake, memory retrieval, reasoning trace, operator handoff, and dispatch.",
+                "demo_use": "Defines the workflow boundary for intake, memory retrieval, reasoning trace, operator handoff, and dispatch-ready output.",
+                "runtime": "python_fallback",
+                "nat_compatible": True,
+                "nat_execution_enabled": False,
             },
             "nemotron": {
                 "role": "Reasoning and synthesis model family",
@@ -390,14 +452,14 @@ def _architecture_positioning() -> dict:
                 "demo_use": "Accelerates graph and dataframe workflows when cuDF/cuGraph are available.",
             },
             "client_models": {
-                "role": "Vault proprietary predictive models",
+                "role": "Customer proprietary predictive models",
                 "foreground": False,
                 "demo_use": "Represented as an integration boundary; not reverse-engineered or simulated as secret IP.",
             },
         },
         "architect_note": (
-            "Keep the demo intentionally narrow: show the might of an agentic workflow, "
-            "not a full replacement for Vault AI's proprietary modeling stack."
+            "Keep the demo intentionally narrow: show the mechanics of an agentic workflow, "
+            "not a full replacement for a customer's proprietary modeling stack."
         ),
     }
 
@@ -557,7 +619,7 @@ def _dispatch_payload(
         "markdown_body": markdown_body,
         "html_body": html_body,
         "dispatch_ready": True,
-        "dispatch_status": "sent" if auto_verify else "draft_ready",
+        "dispatch_status": "simulated_sent" if auto_verify else "draft_ready",
         "auto_verified": auto_verify,
         "rendered_template": rendered_template,
         "generated_artifacts": _generated_artifacts(requested_formats, variables, auto_verify),
@@ -637,8 +699,8 @@ def _demo_workflow_payload(data_dir: str = "data") -> dict:
             "time": "03:07 AM",
             "actor": "Communication Lab",
             "status": dispatch.get("dispatch_status"),
-            "label": "Executive brief dispatched",
-            "detail": f"{dispatch.get('subject')} sent to {', '.join(dispatch.get('recipients', []))}.",
+            "label": "Executive brief prepared",
+            "detail": f"{dispatch.get('subject')} prepared for {', '.join(dispatch.get('recipients', []))}; no real email was sent in demo mode.",
         },
     ]
     return {
@@ -678,7 +740,7 @@ def _demo_workflow_payload(data_dir: str = "data") -> dict:
                 "benchmark": workspace.get("benchmark", {}),
             },
             "communication_lab": {
-                "status": "auto_verified",
+                "status": "dispatch_ready",
                 "rendered_template": dispatch.get("rendered_template"),
                 "html_body": dispatch.get("html_body"),
             },
@@ -833,6 +895,11 @@ async def demo_readiness(data_dir: str = "data") -> dict:
     }
 
 
+@app.get("/launch/readiness")
+async def launch_readiness_route(data_dir: str = "data") -> dict:
+    return launch_readiness(data_dir=data_dir)
+
+
 @app.get("/demo/workflow-run")
 async def demo_workflow_run(data_dir: str = "data") -> dict:
     return _demo_workflow_payload(data_dir=data_dir)
@@ -957,6 +1024,7 @@ async def insight_run_stream(
 
 @app.post("/miranda/chat", response_model=MirandaChatResponse)
 async def miranda_chat(request: MirandaChatRequest) -> MirandaChatResponse:
+    started_at = perf_counter()
     sanitized_messages = [
         {"role": message.role, "content": message.content}
         for message in request.messages
@@ -967,6 +1035,9 @@ async def miranda_chat(request: MirandaChatRequest) -> MirandaChatResponse:
         if message["role"] == "user":
             latest_user = str(message["content"]).strip()
             break
+    query_plan = plan_miranda_query(latest_user)
+    run_id = build_run_id("miranda")
+    trace = query_plan.get("agent_trace", [])
 
     deterministic_reply = (
         "Miranda online. I can synthesize your narrative against portfolio evidence now.\n\n"
@@ -976,11 +1047,25 @@ async def miranda_chat(request: MirandaChatRequest) -> MirandaChatResponse:
 
     curated_reply = _curated_miranda_reply(latest_user)
     if curated_reply:
+        record_run(
+            run_id=run_id,
+            use_case_id=query_plan["use_case"],
+            query_plan=query_plan,
+            result={"reply": curated_reply, "mode": "curated_demo_response"},
+            trace=trace,
+            started_at=started_at,
+        )
         return MirandaChatResponse(
             white_label=request.white_label,
             result={
                 "reply": curated_reply,
                 "mode": "curated_demo_response",
+                "run_id": run_id,
+                "query_plan": query_plan,
+                "selected_agents": query_plan["selected_agents"],
+                "tools_used": query_plan["tools_used"],
+                "missing_data": query_plan["missing_data"],
+                "refinement_options": query_plan["refinement_options"],
             },
         )
 
@@ -989,11 +1074,25 @@ async def miranda_chat(request: MirandaChatRequest) -> MirandaChatResponse:
         or (request.reasoning_mode == "auto" and nim_key_available())
     )
     if not should_try_nim:
+        record_run(
+            run_id=run_id,
+            use_case_id=query_plan["use_case"],
+            query_plan=query_plan,
+            result={"reply": deterministic_reply, "mode": "deterministic"},
+            trace=trace,
+            started_at=started_at,
+        )
         return MirandaChatResponse(
             white_label=request.white_label,
             result={
                 "reply": deterministic_reply,
                 "mode": "deterministic",
+                "run_id": run_id,
+                "query_plan": query_plan,
+                "selected_agents": query_plan["selected_agents"],
+                "tools_used": query_plan["tools_used"],
+                "missing_data": query_plan["missing_data"],
+                "refinement_options": query_plan["refinement_options"],
             },
         )
 
@@ -1002,24 +1101,63 @@ async def miranda_chat(request: MirandaChatRequest) -> MirandaChatResponse:
         model_alias=request.reasoning_model,
     )
     if nim_result.get("ok"):
+        reply = str(nim_result.get("content", "")).strip() or deterministic_reply
+        record_run(
+            run_id=run_id,
+            use_case_id=query_plan["use_case"],
+            query_plan=query_plan,
+            result={"reply": reply, "mode": "nim_reasoning", "model": nim_result.get("model")},
+            trace=trace,
+            started_at=started_at,
+        )
         return MirandaChatResponse(
             white_label=request.white_label,
             result={
-                "reply": str(nim_result.get("content", "")).strip() or deterministic_reply,
+                "reply": reply,
                 "mode": "nim_reasoning",
                 "model": nim_result.get("model"),
                 "latency_ms": nim_result.get("latency_ms"),
+                "run_id": run_id,
+                "query_plan": query_plan,
+                "selected_agents": query_plan["selected_agents"],
+                "tools_used": query_plan["tools_used"],
+                "missing_data": query_plan["missing_data"],
+                "refinement_options": query_plan["refinement_options"],
             },
         )
 
+    record_run(
+        run_id=run_id,
+        use_case_id=query_plan["use_case"],
+        query_plan=query_plan,
+        result={"reply": deterministic_reply, "mode": "deterministic_fallback", "error": str(nim_result.get("error", "nim_request_failed"))},
+        trace=trace,
+        started_at=started_at,
+    )
     return MirandaChatResponse(
         white_label=request.white_label,
         result={
             "reply": deterministic_reply,
             "mode": "deterministic_fallback",
             "error": str(nim_result.get("error", "nim_request_failed")),
+            "run_id": run_id,
+            "query_plan": query_plan,
+            "selected_agents": query_plan["selected_agents"],
+            "tools_used": query_plan["tools_used"],
+            "missing_data": query_plan["missing_data"],
+            "refinement_options": query_plan["refinement_options"],
         },
     )
+
+
+@app.post("/miranda/query")
+async def miranda_query(request: MirandaChatRequest) -> dict:
+    response = await miranda_chat(request)
+    return {
+        "white_label": response.white_label.model_dump(),
+        "result": response.result.model_dump(),
+        "secrets_exposed": False,
+    }
 
 
 @app.post("/interactive-workspace", response_model=WorkspaceResponse)
@@ -1133,6 +1271,7 @@ async def omni_station_status() -> dict:
             "/models/adapters",
             "/models/preview-switch",
             "/demo/readiness",
+            "/launch/readiness",
             "/demo/workflow-run",
             "/generate-brief",
             "/interactive-workspace",
@@ -1143,6 +1282,34 @@ async def omni_station_status() -> dict:
             "/gpu-demo/status",
             "/dispatch/executive-brief",
             "/orchestrator/tools",
+            "/use-cases",
+            "/use-cases/{use_case_id}/contract",
+            "/use-cases/{use_case_id}/readiness",
+            "/use-cases/{use_case_id}/run",
+            "/miranda/query",
+            "/nat/status",
+            "/nat/tools",
+            "/nat/observability",
+            "/agents/catalog",
+            "/agents/plan/{use_case_id}",
+            "/inputs/analyze",
+            "/inputs/enrich-title",
+            "/inputs/ip-scout",
+            "/sdg/status",
+            "/sdg/schemas",
+            "/sdg/generate",
+            "/sdg/experiments/control-vs-sdg",
+            "/sdg/experiments/latest",
+            "/sdg/experiments/latest/evaluation",
+            "/ip-scouting/signals",
+            "/ip-scouting/analyze",
+            "/ip-scouting/ingest/nyt-bestsellers",
+            "/prediction-builder/options",
+            "/prediction-builder/run",
+            "/prediction-builder/runs/{run_id}",
+            "/prediction-builder/runs/{run_id}/comparison",
+            "/prediction-builder/runs/{run_id}/notes",
+            "/prediction-builder/runs/{run_id}/publish",
         ],
     }
 
@@ -1156,6 +1323,292 @@ async def orchestrator_tools() -> dict:
             "tool_schema": "multi-standard-json",
             "tools": TOOL_DEFINITIONS,
         },
+    }
+
+
+@app.get("/nat/status")
+async def nat_status_route() -> dict:
+    return nat_status()
+
+
+@app.get("/nat/tools")
+async def nat_tools_route() -> dict:
+    return nat_tools()
+
+
+@app.get("/nat/runs/{run_id}/trace")
+async def nat_run_trace(run_id: str) -> dict:
+    run = get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    return {
+        "run_id": run_id,
+        "use_case_id": run["use_case_id"],
+        "runtime": run["runtime"],
+        "trace": run["trace"],
+        "secrets_exposed": False,
+    }
+
+
+@app.get("/nat/runs/{run_id}/evaluation")
+async def nat_run_evaluation(run_id: str) -> dict:
+    run = get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    return {
+        "run_id": run_id,
+        "use_case_id": run["use_case_id"],
+        "runtime": run["runtime"],
+        "evaluation": run["evaluation"],
+        "secrets_exposed": False,
+    }
+
+
+@app.get("/nat/runs/{run_id}/profile")
+async def nat_run_profile(run_id: str) -> dict:
+    run = get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    return {
+        "run_id": run_id,
+        "use_case_id": run["use_case_id"],
+        "runtime": run["runtime"],
+        "profile": run["profile"],
+        "secrets_exposed": False,
+    }
+
+
+@app.get("/nat/observability")
+async def nat_observability() -> dict:
+    return observability_summary()
+
+
+@app.get("/agents/catalog")
+async def agents_catalog() -> dict:
+    return {
+        "orchestration_pattern": "four_agent_response_engine",
+        "agents": agent_catalog(),
+        "secrets_exposed": False,
+    }
+
+
+@app.get("/agents/plan/{use_case_id}")
+async def agents_plan(use_case_id: str) -> dict:
+    try:
+        get_use_case(use_case_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Use case not found.") from None
+    return {
+        "use_case_id": use_case_id,
+        "agents": agent_plan_for_use_case(use_case_id),
+        "secrets_exposed": False,
+    }
+
+
+@app.get("/use-cases")
+async def use_cases() -> dict:
+    return {
+        "platform_pattern": "modular_mvt",
+        "query_surface": "miranda",
+        "controller_layer": "nat_compatible_python_fallback",
+        "use_cases": list_use_cases(),
+        "secrets_exposed": False,
+    }
+
+
+@app.get("/use-cases/{use_case_id}/contract")
+async def use_case_contract(use_case_id: str) -> dict:
+    try:
+        use_case = get_use_case(use_case_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Use case not found.") from None
+    return {
+        "contract_type": "modular_mvt_use_case",
+        "use_case": use_case,
+        "secrets_exposed": False,
+    }
+
+
+@app.get("/use-cases/{use_case_id}/readiness")
+async def use_case_readiness_route(use_case_id: str) -> dict:
+    try:
+        readiness = use_case_readiness(use_case_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Use case not found.") from None
+    return {
+        **readiness,
+        "secrets_exposed": False,
+    }
+
+
+@app.post("/inputs/analyze")
+async def inputs_analyze(payload: dict[str, Any]) -> dict:
+    return analyze_input(payload)
+
+
+@app.post("/inputs/enrich-title")
+async def inputs_enrich_title(payload: dict[str, Any]) -> dict:
+    return enrich_title_payload(payload)
+
+
+@app.post("/inputs/ip-scout")
+async def inputs_ip_scout(payload: dict[str, Any]) -> dict:
+    return ip_scout_payload(payload)
+
+
+@app.get("/sdg/status")
+async def sdg_status_route() -> dict:
+    return sdg_status()
+
+
+@app.get("/sdg/schemas")
+async def sdg_schemas_route() -> dict:
+    return sdg_schema_catalog()
+
+
+@app.post("/sdg/generate")
+async def sdg_generate(payload: dict[str, Any]) -> dict:
+    return generate_sdg_payload(payload)
+
+
+@app.post("/sdg/experiments/control-vs-sdg")
+async def sdg_control_vs_sdg(payload: dict[str, Any] | None = None) -> dict:
+    return run_control_vs_sdg_experiment(payload or {})
+
+
+@app.get("/sdg/experiments/latest")
+async def sdg_latest_experiment() -> dict:
+    return latest_sdg_experiment()
+
+
+@app.get("/sdg/experiments/latest/evaluation")
+async def sdg_latest_evaluation() -> dict:
+    return latest_sdg_evaluation()
+
+
+@app.post("/ip-scouting/signals")
+async def ip_scouting_signals_route(payload: dict[str, Any] | None = None) -> dict:
+    payload = payload or {}
+    return ip_scouting_signals(
+        limit=int(payload.get("limit") or 10),
+        genre=payload.get("genre"),
+        audience=payload.get("audience"),
+    )
+
+
+@app.post("/ip-scouting/analyze")
+async def ip_scouting_analyze_route(payload: dict[str, Any]) -> dict:
+    return analyze_ip_scout(payload)
+
+
+@app.post("/ip-scouting/ingest/nyt-bestsellers")
+async def ip_scouting_ingest_nyt(payload: dict[str, Any] | None = None) -> dict:
+    payload = payload or {}
+    try:
+        paths = ingest_nyt_bestsellers(
+            zip_path=Path(payload.get("zip_path") or Path.home() / "Downloads" / "nyt-bestsellers-1931-2024-fictionnon-fiction.zip"),
+            out_dir=Path(payload.get("out_dir") or "data"),
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    return {
+        "status": "complete",
+        "source": "kaggle_nyt_bestsellers_1931_2024",
+        "raw_dir": str(paths.raw_dir),
+        "book_trends": str(paths.book_trends),
+        "secrets_exposed": False,
+    }
+
+
+@app.get("/prediction-builder/options")
+async def prediction_builder_options_route() -> dict:
+    return prediction_builder_options()
+
+
+@app.post("/prediction-builder/run")
+async def prediction_builder_run_route(payload: dict[str, Any]) -> dict:
+    return run_prediction_builder(payload)
+
+
+@app.get("/prediction-builder/runs/{run_id}")
+async def prediction_builder_run_detail(run_id: str) -> dict:
+    run = get_prediction_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Prediction run not found.")
+    return run
+
+
+@app.get("/prediction-builder/runs/{run_id}/comparison")
+async def prediction_builder_run_comparison(run_id: str) -> dict:
+    comparison = prediction_comparison(run_id)
+    if not comparison:
+        raise HTTPException(status_code=404, detail="Prediction run not found.")
+    return comparison
+
+
+@app.get("/prediction-builder/runs/{run_id}/notes")
+async def prediction_builder_run_notes(run_id: str) -> dict:
+    notes = prediction_notes(run_id)
+    if not notes:
+        raise HTTPException(status_code=404, detail="Prediction run not found.")
+    return notes
+
+
+@app.post("/prediction-builder/runs/{run_id}/publish")
+async def prediction_builder_publish(run_id: str, payload: dict[str, Any] | None = None) -> dict:
+    published = publish_prediction_run(run_id, payload)
+    if not published:
+        raise HTTPException(status_code=404, detail="Prediction run not found.")
+    return published
+
+
+@app.post("/use-cases/{use_case_id}/run")
+async def use_case_run(use_case_id: str, payload: dict[str, Any] | None = None) -> dict:
+    try:
+        use_case = get_use_case(use_case_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Use case not found.") from None
+
+    if use_case_id == "media_greenlight":
+        started_at = perf_counter()
+        run = _demo_workflow_payload(data_dir=str((payload or {}).get("data_dir", "data")))
+        record_run(
+            run_id=run["run_id"],
+            use_case_id=use_case_id,
+            query_plan={
+                "raw_query": "registered media greenlight use-case run",
+                "use_case": use_case_id,
+                "persona": "executive",
+                "input_type": "title",
+                "requested_output": "executive_summary",
+                "selected_agents": ["query_planner", "evidence_retrieval", "evidence_validator", "persona_output"],
+                "tools_used": use_case["nat"]["tools"],
+                "missing_data": [],
+                "refinement_options": ["Show operator evidence", "Publish memo", "Compare with SDG-augmented run"],
+            },
+            result=run,
+            trace=run.get("shared_insight_package", {}).get("reasoning_trace", []),
+            started_at=started_at,
+        )
+        return {
+            "use_case_id": use_case_id,
+            "runtime": use_case["nat"]["runtime"],
+            "nat_compatible": use_case["nat"]["nat_compatible"],
+            "nat_execution_enabled": use_case["nat"]["nat_execution_enabled"],
+            "run": run,
+            "secrets_exposed": False,
+        }
+
+    return {
+        "use_case_id": use_case_id,
+        "runtime": use_case["nat"]["runtime"],
+        "nat_compatible": use_case["nat"]["nat_compatible"],
+        "nat_execution_enabled": use_case["nat"]["nat_execution_enabled"],
+        "status": "planned",
+        "message": "This use case is registered for the modular platform and will be implemented in a later phase.",
+        "requested_payload": payload or {},
+        "contract": use_case,
+        "secrets_exposed": False,
     }
 
 
@@ -1174,6 +1627,12 @@ async def frontend_contract() -> FrontendContractResponse:
             "demo_readiness": {
                 "method": "GET",
                 "path": "/demo/readiness",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "launch_readiness": {
+                "method": "GET",
+                "path": "/launch/readiness",
                 "request_model": None,
                 "response_model": "dict",
             },
@@ -1211,6 +1670,30 @@ async def frontend_contract() -> FrontendContractResponse:
                 "method": "GET",
                 "path": "/demo/workflow-run",
                 "request_model": None,
+                "response_model": "dict",
+            },
+            "use_cases": {
+                "method": "GET",
+                "path": "/use-cases",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "use_case_contract": {
+                "method": "GET",
+                "path": "/use-cases/{use_case_id}/contract",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "use_case_readiness": {
+                "method": "GET",
+                "path": "/use-cases/{use_case_id}/readiness",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "use_case_run": {
+                "method": "POST",
+                "path": "/use-cases/{use_case_id}/run",
+                "request_model": "dict",
                 "response_model": "dict",
             },
             "interactive_workspace": {
@@ -1267,6 +1750,168 @@ async def frontend_contract() -> FrontendContractResponse:
                 "request_model": None,
                 "response_model": "text/event-stream",
             },
+            "miranda_query": {
+                "method": "POST",
+                "path": "/miranda/query",
+                "request_model": "MirandaChatRequest",
+                "response_model": "dict",
+            },
+            "nat_status": {
+                "method": "GET",
+                "path": "/nat/status",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "nat_tools": {
+                "method": "GET",
+                "path": "/nat/tools",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "nat_run_trace": {
+                "method": "GET",
+                "path": "/nat/runs/{run_id}/trace",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "nat_run_evaluation": {
+                "method": "GET",
+                "path": "/nat/runs/{run_id}/evaluation",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "nat_run_profile": {
+                "method": "GET",
+                "path": "/nat/runs/{run_id}/profile",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "nat_observability": {
+                "method": "GET",
+                "path": "/nat/observability",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "agents_catalog": {
+                "method": "GET",
+                "path": "/agents/catalog",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "agents_plan": {
+                "method": "GET",
+                "path": "/agents/plan/{use_case_id}",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "inputs_analyze": {
+                "method": "POST",
+                "path": "/inputs/analyze",
+                "request_model": "dict",
+                "response_model": "dict",
+            },
+            "inputs_enrich_title": {
+                "method": "POST",
+                "path": "/inputs/enrich-title",
+                "request_model": "dict",
+                "response_model": "dict",
+            },
+            "inputs_ip_scout": {
+                "method": "POST",
+                "path": "/inputs/ip-scout",
+                "request_model": "dict",
+                "response_model": "dict",
+            },
+            "sdg_status": {
+                "method": "GET",
+                "path": "/sdg/status",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "sdg_schemas": {
+                "method": "GET",
+                "path": "/sdg/schemas",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "sdg_generate": {
+                "method": "POST",
+                "path": "/sdg/generate",
+                "request_model": "dict",
+                "response_model": "dict",
+            },
+            "sdg_control_vs_sdg": {
+                "method": "POST",
+                "path": "/sdg/experiments/control-vs-sdg",
+                "request_model": "dict",
+                "response_model": "dict",
+            },
+            "sdg_latest_experiment": {
+                "method": "GET",
+                "path": "/sdg/experiments/latest",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "sdg_latest_evaluation": {
+                "method": "GET",
+                "path": "/sdg/experiments/latest/evaluation",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "ip_scouting_signals": {
+                "method": "POST",
+                "path": "/ip-scouting/signals",
+                "request_model": "dict",
+                "response_model": "dict",
+            },
+            "ip_scouting_analyze": {
+                "method": "POST",
+                "path": "/ip-scouting/analyze",
+                "request_model": "dict",
+                "response_model": "dict",
+            },
+            "ip_scouting_ingest_nyt": {
+                "method": "POST",
+                "path": "/ip-scouting/ingest/nyt-bestsellers",
+                "request_model": "dict",
+                "response_model": "dict",
+            },
+            "prediction_builder_options": {
+                "method": "GET",
+                "path": "/prediction-builder/options",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "prediction_builder_run": {
+                "method": "POST",
+                "path": "/prediction-builder/run",
+                "request_model": "dict",
+                "response_model": "dict",
+            },
+            "prediction_builder_detail": {
+                "method": "GET",
+                "path": "/prediction-builder/runs/{run_id}",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "prediction_builder_comparison": {
+                "method": "GET",
+                "path": "/prediction-builder/runs/{run_id}/comparison",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "prediction_builder_notes": {
+                "method": "GET",
+                "path": "/prediction-builder/runs/{run_id}/notes",
+                "request_model": None,
+                "response_model": "dict",
+            },
+            "prediction_builder_publish": {
+                "method": "POST",
+                "path": "/prediction-builder/runs/{run_id}/publish",
+                "request_model": "dict",
+                "response_model": "dict",
+            },
             "gpu_demo_status": {
                 "method": "GET",
                 "path": "/gpu-demo/status",
@@ -1283,6 +1928,7 @@ async def frontend_contract() -> FrontendContractResponse:
                 "white_label": {"brand_name": "Media Intelligence Engine", "theme": {}},
             },
             "demo_readiness": {"method": "GET", "path": "/demo/readiness"},
+            "launch_readiness": {"method": "GET", "path": "/launch/readiness"},
             "public_config": {"method": "GET", "path": "/config/public"},
             "model_adapters": {"method": "GET", "path": "/models/adapters"},
             "model_preview_switch": {
@@ -1290,6 +1936,13 @@ async def frontend_contract() -> FrontendContractResponse:
                 "model": "customer-hosted-reasoner",
                 "auth_mode": "customer_managed",
                 "purpose": "executive_brief",
+            },
+            "use_cases": {"method": "GET", "path": "/use-cases"},
+            "use_case_contract": {"method": "GET", "path": "/use-cases/prediction_builder/contract"},
+            "use_case_run": {
+                "method": "POST",
+                "path": "/use-cases/media_greenlight/run",
+                "data_dir": "data",
             },
             "demo_workflow_run": {"method": "GET", "path": "/demo/workflow-run"},
             "dispatch_executive_brief": {
@@ -1327,6 +1980,57 @@ async def frontend_contract() -> FrontendContractResponse:
             "orchestrator_tools": {"method": "GET", "path": "/orchestrator/tools"},
             "autonomous_intake": {"method": "GET", "path": "/autonomous-intake/feed?limit=6"},
             "insight_run_stream": {"method": "GET", "path": "/insight-runs/stream?candidate_limit=5"},
+            "miranda_query": {
+                "messages": [{"role": "user", "content": "Build an IP fit prediction for rising YA book properties."}],
+                "reasoning_mode": "auto",
+                "reasoning_model": "nano",
+            },
+            "nat_status": {"method": "GET", "path": "/nat/status"},
+            "nat_observability": {"method": "GET", "path": "/nat/observability"},
+            "agents_catalog": {"method": "GET", "path": "/agents/catalog"},
+            "agents_plan": {"method": "GET", "path": "/agents/plan/prediction_builder"},
+            "inputs_analyze": {
+                "input_type": "book_ip",
+                "title": "Example Rising YA Novel",
+                "author": "Example Author",
+                "genre": "YA fantasy",
+                "market_signals": ["reader momentum"],
+            },
+            "inputs_enrich_title": {
+                "title": "Example Rising YA Novel",
+                "genre": "YA fantasy",
+            },
+            "inputs_ip_scout": {
+                "text": "Book IP with YA fantasy momentum but unknown rights status.",
+            },
+            "sdg_status": {"method": "GET", "path": "/sdg/status"},
+            "sdg_generate": {
+                "schema_id": "ip_scouting_profile",
+                "count": 3,
+                "seed": {"title": "Example Rising YA Novel", "genre": "YA Fantasy"},
+            },
+            "sdg_control_vs_sdg": {
+                "schema_id": "title_metadata_enrichment",
+                "count": 5,
+                "seed": {"title": "Example Sparse Title"},
+            },
+            "sdg_latest_evaluation": {"method": "GET", "path": "/sdg/experiments/latest/evaluation"},
+            "ip_scouting_analyze": {
+                "query": "Find rising YA book IP.",
+                "genre": "YA",
+                "limit": 3,
+            },
+            "ip_scouting_ingest_nyt": {
+                "zip_path": "~/Downloads/nyt-bestsellers-1931-2024-fictionnon-fiction.zip",
+                "out_dir": "data",
+            },
+            "prediction_builder_run": {
+                "objective": "ip_fit",
+                "asset": {"type": "book_ip", "id": "ip_book_001", "title": "The Glass Orchard"},
+                "strategy": "sdg_augmented",
+                "models": ["xgboost", "leiden_communities", "stacked_ensemble"],
+                "publish_target": "memo",
+            },
             "gpu_demo_status": {"method": "GET", "path": "/gpu-demo/status"},
         },
     )

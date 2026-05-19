@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: media-intelligence-api
+    env: python
+    plan: starter
+    buildCommand: python -m pip install --upgrade pip && python -m pip install -e ".[server]"
+    startCommand: python -m uvicorn server.api_server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: MIE_CORS_ORIGINS
+        sync: false
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: NGC_API_KEY
+        sync: false
+      - key: NIM_BASE_URL
+        value: https://integrate.api.nvidia.com/v1

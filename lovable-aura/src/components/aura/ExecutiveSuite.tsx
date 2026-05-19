@@ -581,7 +581,7 @@ export const ExecutiveSuite = () => {
               <h2 className="mt-2 font-serif text-3xl text-obsidian">The demo is the workflow.</h2>
               <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
                 This is not trying to recreate a customer's proprietary predictive models. It shows how
-                NAT can orchestrate the briefing workflow around their data and model boundary, while Nemotron
+                the NAT-compatible workflow can run around their data and model boundary, while Nemotron
                 Nano provides low-latency reasoning for persona-ready output.
               </p>
               <div className="mt-5 space-y-3">

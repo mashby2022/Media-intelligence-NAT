@@ -82,6 +82,6 @@ def gpu_demo_status(data_dir: str | Path = "data") -> dict[str, Any]:
             "runtime": missing_runtime,
             "nat": [] if nat_available else ["nat or aiq or nvidia_nat"],
             "datasets": missing_datasets,
-            "credentials": [] if key_configured else ["NVIDIA_API_KEY or NGC_API_KEY"],
+            "credentials": [] if key_configured else ["nvidia_service_credential"],
         },
     }

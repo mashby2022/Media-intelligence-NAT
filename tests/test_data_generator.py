@@ -1,9 +1,11 @@
 from pathlib import Path
+import zipfile
 
 import polars as pl
 
 from engine.analytics import cultural_signal_network_evidence, graph_engine_capabilities, historical_memory_evidence, knowledge_search_evidence, market_signal_evidence, portfolio_evidence
 from agent.tools import analyze_cultural_signal_network, get_market_signal_evidence, query_historical_memory, search_living_knowledge, synthesize_evidence
+from engine.book_trend_ingestion import ingest_nyt_bestsellers
 from engine.data_generator import build_cultural_graph_edges, generate_scripts
 from engine.market_ingestion import run as run_market_ingestion
 from engine.visuals import accelerated_visual_capabilities, stand_up_cuxfilter_server, workspace_payload
@@ -266,6 +268,26 @@ def test_accelerated_visuals_report_capabilities_without_rapids() -> None:
     assert any(chart["column"] == "budget_tier" for chart in result["spec"]["charts"] if "column" in chart)
 
 
+def test_nyt_bestseller_ingestion_builds_book_trend_signals(tmp_path: Path) -> None:
+    raw_csv = tmp_path / "nyt.csv"
+    raw_csv.write_text(
+        "title,author,list_name,published_date,rank,weeks_on_list,description,publisher,isbn13\n"
+        "The Test Orchard,Mara Vale,Young Adult Hardcover,2024-01-07,1,12,Fixture description,Fixture Press,9780000000001\n"
+        "The Other Signal,Eli Noor,Combined Print Fiction,2024-01-07,9,3,Fixture description,Signal House,9780000000002\n"
+    )
+    zip_path = tmp_path / "nyt-bestsellers.zip"
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        archive.write(raw_csv, arcname="nyt.csv")
+
+    paths = ingest_nyt_bestsellers(zip_path=zip_path, out_dir=tmp_path / "data")
+
+    assert paths.book_trends.exists()
+    df = pl.read_parquet(paths.book_trends)
+    assert df.height == 2
+    assert df["source_type"][0] == "nyt_bestseller_kaggle"
+    assert df["trend_velocity"][0] > df["trend_velocity"][1]
+
+
 def test_cultural_signal_network_evidence_scores_scripts(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     data_dir.mkdir()
@@ -349,7 +371,62 @@ def test_operator_workspace_api_route(tmp_path: Path) -> None:
         },
     )
     readiness_response = client.get("/demo/readiness")
+    launch_readiness_response = client.get("/launch/readiness")
     workflow_response = client.get("/demo/workflow-run")
+    use_cases_response = client.get("/use-cases")
+    prediction_contract_response = client.get("/use-cases/prediction_builder/contract")
+    media_readiness_response = client.get("/use-cases/media_greenlight/readiness")
+    media_run_response = client.post("/use-cases/media_greenlight/run", json={"data_dir": "data"})
+    nat_status_response = client.get("/nat/status")
+    nat_tools_response = client.get("/nat/tools")
+    nat_observability_response = client.get("/nat/observability")
+    agents_catalog_response = client.get("/agents/catalog")
+    agents_plan_response = client.get("/agents/plan/prediction_builder")
+    input_analysis_response = client.post(
+        "/inputs/analyze",
+        json={
+            "text": "A rising YA fantasy book IP with social momentum and unknown rights status.",
+            "author": "Example Author",
+            "market_signals": ["reader momentum"],
+        },
+    )
+    enrich_title_response = client.post(
+        "/inputs/enrich-title",
+        json={"title": "Example Rising YA Novel", "genre": "YA fantasy"},
+    )
+    ip_scout_response = client.post(
+        "/inputs/ip-scout",
+        json={"text": "Book IP with YA fantasy momentum but unknown rights status."},
+    )
+    sdg_status_response = client.get("/sdg/status")
+    sdg_schemas_response = client.get("/sdg/schemas")
+    sdg_generate_response = client.post(
+        "/sdg/generate",
+        json={
+            "schema_id": "ip_scouting_profile",
+            "count": 2,
+            "seed": {"title": "Example Rising YA Novel", "genre": "YA Fantasy"},
+        },
+    )
+    sdg_experiment_response = client.post(
+        "/sdg/experiments/control-vs-sdg",
+        json={"schema_id": "title_metadata_enrichment", "count": 3},
+    )
+    sdg_latest_response = client.get("/sdg/experiments/latest")
+    sdg_eval_response = client.get("/sdg/experiments/latest/evaluation")
+    ip_signals_response = client.post("/ip-scouting/signals", json={"genre": "YA", "limit": 2})
+    ip_analyze_response = client.post("/ip-scouting/analyze", json={"query": "Find rising YA book IP", "genre": "YA", "limit": 2})
+    prediction_options_response = client.get("/prediction-builder/options")
+    prediction_run_response = client.post(
+        "/prediction-builder/run",
+        json={
+            "objective": "ip_fit",
+            "asset": {"type": "book_ip", "id": "ip_book_001", "title": "The Glass Orchard"},
+            "strategy": "sdg_augmented",
+            "models": ["xgboost", "leiden_communities", "stacked_ensemble"],
+            "publish_target": "memo",
+        },
+    )
     cors_response = client.options(
         "/interactive-workspace",
         headers={
@@ -368,7 +445,30 @@ def test_operator_workspace_api_route(tmp_path: Path) -> None:
     assert model_adapters_response.status_code == 200
     assert model_preview_response.status_code == 200
     assert readiness_response.status_code == 200
+    assert launch_readiness_response.status_code == 200
     assert workflow_response.status_code == 200
+    assert use_cases_response.status_code == 200
+    assert prediction_contract_response.status_code == 200
+    assert media_readiness_response.status_code == 200
+    assert media_run_response.status_code == 200
+    assert nat_status_response.status_code == 200
+    assert nat_tools_response.status_code == 200
+    assert nat_observability_response.status_code == 200
+    assert agents_catalog_response.status_code == 200
+    assert agents_plan_response.status_code == 200
+    assert input_analysis_response.status_code == 200
+    assert enrich_title_response.status_code == 200
+    assert ip_scout_response.status_code == 200
+    assert sdg_status_response.status_code == 200
+    assert sdg_schemas_response.status_code == 200
+    assert sdg_generate_response.status_code == 200
+    assert sdg_experiment_response.status_code == 200
+    assert sdg_latest_response.status_code == 200
+    assert sdg_eval_response.status_code == 200
+    assert ip_signals_response.status_code == 200
+    assert ip_analyze_response.status_code == 200
+    assert prediction_options_response.status_code == 200
+    assert prediction_run_response.status_code == 200
     assert cors_response.status_code == 200
     assert "Operator Workspace" in response.text
     assert omni_response.json()["status"] == "connected"
@@ -382,15 +482,41 @@ def test_operator_workspace_api_route(tmp_path: Path) -> None:
     assert "autonomous_intake" in contract_response.json()["routes"]
     assert "insight_run_stream" in contract_response.json()["routes"]
     assert "demo_readiness" in contract_response.json()["routes"]
+    assert "launch_readiness" in contract_response.json()["routes"]
     assert "public_config" in contract_response.json()["routes"]
     assert "model_adapters" in contract_response.json()["routes"]
     assert "model_preview_switch" in contract_response.json()["routes"]
     assert "demo_workflow_run" in contract_response.json()["routes"]
+    assert "use_cases" in contract_response.json()["routes"]
+    assert "use_case_contract" in contract_response.json()["routes"]
+    assert "use_case_readiness" in contract_response.json()["routes"]
+    assert "use_case_run" in contract_response.json()["routes"]
+    assert "miranda_query" in contract_response.json()["routes"]
+    assert "nat_status" in contract_response.json()["routes"]
+    assert "nat_tools" in contract_response.json()["routes"]
+    assert "nat_observability" in contract_response.json()["routes"]
+    assert "agents_catalog" in contract_response.json()["routes"]
+    assert "inputs_analyze" in contract_response.json()["routes"]
+    assert "inputs_enrich_title" in contract_response.json()["routes"]
+    assert "inputs_ip_scout" in contract_response.json()["routes"]
+    assert "sdg_status" in contract_response.json()["routes"]
+    assert "sdg_generate" in contract_response.json()["routes"]
+    assert "sdg_control_vs_sdg" in contract_response.json()["routes"]
+    assert "sdg_latest_evaluation" in contract_response.json()["routes"]
+    assert "ip_scouting_signals" in contract_response.json()["routes"]
+    assert "ip_scouting_analyze" in contract_response.json()["routes"]
+    assert "ip_scouting_ingest_nyt" in contract_response.json()["routes"]
+    assert "prediction_builder_options" in contract_response.json()["routes"]
+    assert "prediction_builder_run" in contract_response.json()["routes"]
+    assert "prediction_builder_publish" in contract_response.json()["routes"]
     assert "/config/public" in omni_response.json()["routes"]
     assert "/models/adapters" in omni_response.json()["routes"]
     assert "/models/preview-switch" in omni_response.json()["routes"]
     assert "/demo/readiness" in omni_response.json()["routes"]
+    assert "/launch/readiness" in omni_response.json()["routes"]
     assert "/demo/workflow-run" in omni_response.json()["routes"]
+    assert "/use-cases" in omni_response.json()["routes"]
+    assert "/use-cases/{use_case_id}/contract" in omni_response.json()["routes"]
     assert health_response.json()["status"] == "ok"
     assert "gpu_demo" in health_response.json()
     assert "ops" in health_response.json()
@@ -430,6 +556,72 @@ def test_operator_workspace_api_route(tmp_path: Path) -> None:
     assert "NVIDIA_API_KEY" not in public_config_text
     assert readiness_response.json()["status"] in {"ready", "degraded"}
     assert readiness_response.json()["secrets_exposed"] is False
+    assert launch_readiness_response.json()["phase"] == "launch_readiness"
+    assert launch_readiness_response.json()["deployment_options"]["brev_editable_workspace"]["requires_login"] is True
+    assert launch_readiness_response.json()["customer_demo_boundary"]["book_data"]
+    assert launch_readiness_response.json()["secrets_exposed"] is False
+    assert use_cases_response.json()["platform_pattern"] == "modular_mvt"
+    assert use_cases_response.json()["query_surface"] == "miranda"
+    assert any(item["use_case_id"] == "prediction_builder" for item in use_cases_response.json()["use_cases"])
+    prediction_contract = prediction_contract_response.json()["use_case"]
+    assert prediction_contract["use_case_id"] == "prediction_builder"
+    assert prediction_contract["mvc_layers"]["controller"]
+    assert "sdg_augmented" in prediction_contract["strategies"]
+    assert "xgboost" in prediction_contract["models"]
+    assert media_readiness_response.json()["status"] == "ready"
+    assert media_readiness_response.json()["nat_compatible"] is True
+    assert media_readiness_response.json()["nat_execution_enabled"] is False
+    assert media_run_response.json()["use_case_id"] == "media_greenlight"
+    assert media_run_response.json()["run"]["status"] == "complete"
+    assert nat_status_response.json()["runtime"] == "python_fallback"
+    assert nat_status_response.json()["nat_compatible"] is True
+    assert nat_status_response.json()["nat_execution_enabled"] is False
+    assert "metadata_gap_detector" in nat_tools_response.json()["planned_tools"]
+    assert nat_observability_response.json()["nat_compatible"] is True
+    assert agents_catalog_response.json()["orchestration_pattern"] == "four_agent_response_engine"
+    assert len(agents_catalog_response.json()["agents"]) == 4
+    assert agents_plan_response.json()["agents"][0]["agent_id"] == "query_planner"
+    assert input_analysis_response.json()["input_type"] == "deal_ip_roster_item"
+    assert "source_confidence" in input_analysis_response.json()["missing_fields"]
+    assert enrich_title_response.json()["status"] == "enrichment_plan_ready"
+    assert "nemo_data_designer_sdg" in enrich_title_response.json()["recommended_enrichment_tools"]
+    assert ip_scout_response.json()["recommended_use_case"] == "ip_scouting"
+    assert sdg_status_response.json()["primary_sdg_stack"] == "NeMo Data Designer + Nemotron"
+    assert sdg_status_response.json()["control_baseline"] == "current Python/Polars synthetic generator"
+    assert "ip_scouting_profile" in sdg_schemas_response.json()["schemas"]
+    assert sdg_generate_response.json()["runtime"] in {"mock_local", "nemo_data_designer"}
+    assert sdg_generate_response.json()["schema"]["schema_id"] == "ip_scouting_profile"
+    assert len(sdg_generate_response.json()["records"]) == 2
+    assert sdg_experiment_response.json()["experiment"] == "control_vs_sdg"
+    assert sdg_latest_response.json()["experiment_id"] == sdg_experiment_response.json()["experiment_id"]
+    assert sdg_eval_response.json()["evaluation"]["sdg_improves_coverage"] is True
+    assert sdg_eval_response.json()["metrics"]["deltas"]["metadata_completeness"] > 0
+    assert ip_signals_response.json()["evidence_type"] == "ip_book_trend_signals"
+    assert ip_signals_response.json()["signals"][0]["genre"] == "YA Fantasy"
+    assert ip_analyze_response.json()["analysis_type"] == "ip_scouting"
+    assert ip_analyze_response.json()["candidates"][0]["ip_fit_score"] > 0
+    assert "verified_rights_status" in ip_analyze_response.json()["agent_notes"]["missing_data"]
+    assert "sdg_augmented" in prediction_options_response.json()["options"]["strategies"]
+    prediction_run = prediction_run_response.json()
+    assert prediction_run["objective"] == "ip_fit"
+    assert prediction_run["strategy"] == "sdg_augmented"
+    assert prediction_run["best_model"]["model"] == "stacked_ensemble"
+    assert prediction_run["comparison"]["lift_vs_baseline"] > 0
+    prediction_run_id = prediction_run["run_id"]
+    prediction_detail_response = client.get(f"/prediction-builder/runs/{prediction_run_id}")
+    prediction_comparison_response = client.get(f"/prediction-builder/runs/{prediction_run_id}/comparison")
+    prediction_notes_response = client.get(f"/prediction-builder/runs/{prediction_run_id}/notes")
+    prediction_publish_response = client.post(
+        f"/prediction-builder/runs/{prediction_run_id}/publish",
+        json={"publish_target": "dashboard_tile"},
+    )
+    assert prediction_detail_response.status_code == 200
+    assert prediction_comparison_response.status_code == 200
+    assert prediction_notes_response.status_code == 200
+    assert prediction_publish_response.status_code == 200
+    assert prediction_notes_response.json()["agent_notes"]["missing_data"]
+    assert prediction_publish_response.json()["status"] == "published_to_demo_surface"
+    assert prediction_publish_response.json()["publish_target"] == "dashboard_tile"
     assert workflow_response.json()["status"] == "complete"
     assert workflow_response.json()["secrets_exposed"] is False
     assert workflow_response.json()["shared_asset_id"]
@@ -480,6 +672,19 @@ def test_persona_api_contracts() -> None:
             "white_label": {"brand_name": "Aura Intelligence", "theme": {}},
         },
     )
+    miranda_query_response = client.post(
+        "/miranda/query",
+        json={
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Build an IP fit prediction for rising YA book properties and publish a development memo.",
+                }
+            ],
+            "reasoning_mode": "deterministic",
+            "reasoning_model": "nano",
+        },
+    )
     tools_response = client.get("/orchestrator/tools")
     datasets_response = client.get("/datasets")
     dataset_csv_response = client.get("/datasets/scripts_150k.parquet/download?format=csv")
@@ -506,6 +711,7 @@ def test_persona_api_contracts() -> None:
     assert readiness_response.status_code == 200
     assert workflow_response.status_code == 200
     assert dispatch_response.status_code == 200
+    assert miranda_query_response.status_code == 200
     assert tools_response.status_code == 200
     assert datasets_response.status_code == 200
     assert dataset_csv_response.status_code == 200
@@ -521,20 +727,20 @@ def test_persona_api_contracts() -> None:
     assert "event: trace" in stream_response.text
     assert "event: result" in stream_response.text
     assert readiness_response.json()["phases"]["phase_4_dispatch_loop"]["ready"] is True
-    assert readiness_response.json()["phases"]["phase_4_dispatch_loop"]["dispatch_status"] == "sent"
+    assert readiness_response.json()["phases"]["phase_4_dispatch_loop"]["dispatch_status"] == "simulated_sent"
     workflow = workflow_response.json()
     assert workflow["mode"] == "autonomous_workflow_simulation"
-    assert workflow["architecture_positioning"]["primary_story"].startswith("NAT-orchestrated")
+    assert workflow["architecture_positioning"]["primary_story"].startswith("NAT-compatible")
     assert workflow["architecture_positioning"]["components"]["client_models"]["foreground"] is False
     assert workflow["shared_asset_id"] == workflow["shared_insight_package"]["asset_id"]
     assert workflow["intake"]["asset"]["script_id"] == workflow["shared_asset_id"]
-    assert workflow["surfaces"]["executive_email"]["status"] == "sent"
+    assert workflow["surfaces"]["executive_email"]["status"] == "simulated_sent"
     assert workflow["surfaces"]["operator_workspace"]["status"] == "published"
-    assert workflow["surfaces"]["communication_lab"]["status"] == "auto_verified"
+    assert workflow["surfaces"]["communication_lab"]["status"] == "dispatch_ready"
     assert workflow["shared_insight_package"]["reasoning_trace"]
     assert workflow["shared_insight_package"]["memory_matches"]
     assert dispatch_response.json()["result"]["dispatch_ready"] is True
-    assert dispatch_response.json()["result"]["dispatch_status"] == "sent"
+    assert dispatch_response.json()["result"]["dispatch_status"] == "simulated_sent"
     assert dispatch_response.json()["result"]["auto_verified"] is True
     assert "Aura Intelligence" in dispatch_response.json()["result"]["html_body"]
     assert dispatch_response.json()["result"]["rendered_template"]
@@ -543,6 +749,22 @@ def test_persona_api_contracts() -> None:
     assert len(dispatch_response.json()["result"]["bullets"]) == 3
     assert dispatch_response.json()["result"]["recipients"] == ["client@example.com"]
     assert "Greenlight Brief" in dispatch_response.json()["result"]["subject"]
+    miranda_result = miranda_query_response.json()["result"]
+    assert miranda_result["query_plan"]["use_case"] == "prediction_builder"
+    assert miranda_result["query_plan"]["persona"] == "development"
+    assert miranda_result["query_plan"]["agent_trace"]
+    assert "model_runner" in miranda_result["tools_used"]
+    assert miranda_result["run_id"]
+    trace_response = client.get(f"/nat/runs/{miranda_result['run_id']}/trace")
+    eval_response = client.get(f"/nat/runs/{miranda_result['run_id']}/evaluation")
+    profile_response = client.get(f"/nat/runs/{miranda_result['run_id']}/profile")
+    assert trace_response.status_code == 200
+    assert eval_response.status_code == 200
+    assert profile_response.status_code == 200
+    assert trace_response.json()["trace"]
+    assert trace_response.json()["trace"][0]["agent_id"] == "query_planner"
+    assert eval_response.json()["evaluation"]["overall_status"] == "pass"
+    assert profile_response.json()["profile"]["runtime"] == "python_fallback"
     assert tools_response.json()["orchestrator_profile"] == "miranda-compatible"
     assert len(tools_response.json()["liaison_core"]["tools"]) >= 3
     assert datasets_response.json()["secrets_exposed"] is False

@@ -1,6 +1,6 @@
 # Pre-Lovable Demo Checklist
 
-Use this before reconnecting the Lovable workspace. The goal is to keep the demo narrow: NAT orchestrates the workflow, Nemotron reasons over the evidence package, and Polars/RAPIDS support the data path.
+Use this before reconnecting the Lovable workspace. The goal is to keep the demo narrow: the current workflow is NAT-compatible, Nemotron reasons over the evidence package when configured, and Polars/RAPIDS support the data path.
 
 ## Model Inventory
 
@@ -28,10 +28,10 @@ Bring-your-own-model behavior:
 
 Supporting stack:
 
-- NAT: agentic workflow orchestration boundary.
+- NAT: agentic workflow orchestration boundary. Current runtime is Python fallback until NAT execution is wired.
 - Polars: tabular processing and workspace filtering.
 - RAPIDS: optional GPU acceleration when cuDF/cuGraph/cuML/cuxfilter are available.
-- Vault proprietary predictive models: integration boundary only. This demo does not reproduce them.
+- Customer proprietary predictive models: integration boundary only. This demo does not reproduce them.
 
 ## Local Servers
 
@@ -94,9 +94,9 @@ VITE_MIE_REASONING_MODEL=nano
 ## Demo Talk Track
 
 1. Start at `/demo`.
-2. Lead with the architecture frame: NAT orchestration and Nemotron reasoning are the foreground story.
-3. Call out the boundary: Vault AI's secret predictive models are not recreated; they would plug into this orchestration layer.
-4. Click `Run` in Vault AI Workflow Run.
+2. Lead with the architecture frame: the NAT-compatible orchestration boundary and Nemotron reasoning are the foreground story.
+3. Call out the boundary: customer proprietary predictive models are not recreated; they would plug into this orchestration layer.
+4. Click `Run` in Customer Workflow Run.
 5. Show the timeline: intake, reasoning trace, memory lookup, operator handoff, dispatch.
 6. Open `/operator` to show the evidence surface.
 7. Open `/communication` to show the executive brief dispatch surface.

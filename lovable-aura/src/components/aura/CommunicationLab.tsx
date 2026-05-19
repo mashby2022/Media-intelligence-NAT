@@ -222,9 +222,9 @@ export const CommunicationLab = () => {
       setDispatched(true);
       setTimeout(() => setDispatched(false), 2400);
       toast({
-        title: autonomous ? "Dispatch sent" : "Executive brief dispatched",
+        title: autonomous ? "Simulated dispatch prepared" : "Executive brief prepared",
         description: autonomous
-          ? `${payload.subject} · Auto-Verify completed.`
+          ? `${payload.subject} · Auto-Verify completed; no real email was sent.`
           : `${payload.subject} · ${activeFormat.label} downloaded as ${filename}.`,
       });
     } catch (err) {
@@ -350,7 +350,7 @@ export const CommunicationLab = () => {
                 autoVerify ? "bg-[#10B981]/10 text-[#10B981]" : "bg-amethyst/10 text-amethyst"
               }`}>
                 <ShieldCheck className="h-3 w-3" />
-                {autoVerify ? "auto-send armed" : "review draft mode"}
+                {autoVerify ? "simulated send armed" : "review draft mode"}
               </span>
               <button
                 onClick={() => setShowTemplateEditor((open) => !open)}
@@ -397,7 +397,7 @@ export const CommunicationLab = () => {
             <span className="inline-flex items-center gap-1 font-mono normal-case tracking-normal">
               <Paperclip className="h-3 w-3" /> {artifacts[0]?.filename || activeFormat.meta}
             </span>
-              <span className="text-mint-deep">{dispatchProof?.status === "sent" ? "dispatch receipt logged" : "draft ready"}</span>
+              <span className="text-mint-deep">{dispatchProof?.status === "simulated_sent" ? "simulated dispatch logged" : "draft ready"}</span>
           </div>
         </article>
       </div>
@@ -414,11 +414,11 @@ export const CommunicationLab = () => {
                 <div>
                   <div className="text-[10px] tracking-couture uppercase text-amethyst">Close the Loop</div>
                   <h3 className="font-serif text-xl text-obsidian">
-                    {autoVerify ? "Miranda sends the brief after Auto-Verify" : "Prepare the executive inbox brief"}
+                    {autoVerify ? "Miranda prepares the brief after Auto-Verify" : "Prepare the executive inbox brief"}
                   </h3>
                   <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
                     {autoVerify
-                      ? "NAT sequence · template injection · recipient check · backend dispatch_status=sent"
+                      ? "NAT-compatible sequence · template injection · recipient check · backend dispatch_status=simulated_sent"
                       : "reviewable draft · template preview · local export"}
                   </div>
                 </div>
@@ -435,7 +435,7 @@ export const CommunicationLab = () => {
                     className="data-[state=checked]:bg-mint-deep"
                   />
                   <span className="text-[10px] tracking-couture uppercase text-obsidian">
-                    {autoVerify ? "Auto-send mode" : "Review mode"}
+                    {autoVerify ? "Simulated send mode" : "Review mode"}
                   </span>
                 </div>
                 <input
@@ -473,9 +473,9 @@ export const CommunicationLab = () => {
                     : autoVerify ? <Inbox className="h-3.5 w-3.5" />
                     : <Send className="h-3.5 w-3.5" />}
                   {exporting
-                    ? autoVerify ? "Running auto-send..." : "Composing draft..."
+                    ? autoVerify ? "Preparing simulated send..." : "Composing draft..."
                     : dispatched ? "Dispatch complete"
-                    : autoVerify ? "Run autonomous send" : "Export review draft"}
+                    : autoVerify ? "Run simulated send" : "Export review draft"}
                   <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                 </button>
               </div>
@@ -485,19 +485,19 @@ export const CommunicationLab = () => {
               <div className="rounded-xl border border-emerald-200/70 bg-white/70 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-[10px] tracking-couture uppercase text-mint-deep">Autonomous Send Sequence</div>
+                    <div className="text-[10px] tracking-couture uppercase text-mint-deep">Simulated Dispatch Sequence</div>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Shows what Miranda does when the workflow is allowed to finish without a manual download step.
+                      Shows what Miranda prepares when the workflow is allowed to finish without a manual download step.
                     </p>
                   </div>
                   <span className={`rounded-full px-3 py-1 text-[10px] tracking-couture uppercase ${
-                    dispatchProof?.status === "sent"
+                    dispatchProof?.status === "simulated_sent"
                       ? "bg-[#10B981]/10 text-[#10B981]"
                       : exporting && autoVerify
                         ? "bg-amber-100 text-amber-700"
                         : "bg-lavender text-amethyst"
                   }`}>
-                    {dispatchProof?.status === "sent" ? "sent" : exporting && autoVerify ? "running" : autoVerify ? "armed" : "standby"}
+                    {dispatchProof?.status === "simulated_sent" ? "simulated sent" : exporting && autoVerify ? "running" : autoVerify ? "armed" : "standby"}
                   </span>
                 </div>
 
@@ -506,10 +506,10 @@ export const CommunicationLab = () => {
                     { label: "Evidence locked", detail: "ranked asset package", Icon: ClipboardCheck },
                     { label: "Template injected", detail: activeVoice.replace("-", " "), Icon: FileCode2 },
                     { label: "Auto-Verify", detail: autoVerify ? "enabled" : "off", Icon: ShieldCheck },
-                    { label: "Inbox dispatch", detail: recipientEmail, Icon: Inbox },
+                    { label: "Dispatch target", detail: recipientEmail, Icon: Inbox },
                   ].map((step, index) => {
                     const StepIcon = step.Icon;
-                    const complete = dispatchProof?.status === "sent" || (index < 2 && (exporting || autoVerify));
+                    const complete = dispatchProof?.status === "simulated_sent" || (index < 2 && (exporting || autoVerify));
                     const active = exporting && autoVerify && index === 2;
                     return (
                       <div key={step.label} className="rounded-lg border border-border/60 bg-white/75 px-3 py-3">
@@ -553,7 +553,7 @@ export const CommunicationLab = () => {
                   </div>
                 ) : (
                   <p className="mt-3 text-sm text-muted-foreground">
-                    Run auto-send to show proof that the backend returned a sent dispatch and generated inbox artifacts.
+                    Run simulated send to show proof that the backend returned a prepared dispatch and generated inbox artifacts.
                   </p>
                 )}
               </div>
