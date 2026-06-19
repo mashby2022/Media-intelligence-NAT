@@ -24,6 +24,8 @@ def nim_key_available() -> bool:
     return bool(_get_api_key())
 
 NIM_TIMEOUT_SEC = float(os.getenv("NIM_TIMEOUT_SEC", "25.0"))
+NIM_SYNTHESIS_MAX_TOKENS = int(os.getenv("NIM_SYNTHESIS_MAX_TOKENS", "700"))
+NIM_CHAT_MAX_TOKENS = int(os.getenv("NIM_CHAT_MAX_TOKENS", "1200"))
 
 def _resolve_model_name(model_alias: str) -> str:
     return DEFAULT_MODELS.get(model_alias, model_alias)
@@ -124,7 +126,7 @@ def synthesize_with_nim(
         ],
         "temperature": 0.6,
         "top_p": 0.95,
-        "max_tokens": 700,
+        "max_tokens": NIM_SYNTHESIS_MAX_TOKENS,
         "stream": False,
     }
 
@@ -172,7 +174,7 @@ def chat_with_nim(*, messages: list[dict[str, str]], model_alias: str = DEFAULT_
         "messages": chat_messages,
         "temperature": 0.6,
         "top_p": 0.95,
-        "max_tokens": 700,
+        "max_tokens": NIM_CHAT_MAX_TOKENS,
         "stream": False,
     }
     

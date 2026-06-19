@@ -16,3 +16,7 @@ services:
         sync: false
       - key: NIM_BASE_URL
         value: https://integrate.api.nvidia.com/v1
+      - key: NIM_CHAT_MAX_TOKENS
+        value: "1200"
+      - key: NIM_TIMEOUT_SEC
+        value: "30.0"

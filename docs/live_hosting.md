@@ -22,9 +22,12 @@ This repo is best hosted as two services:
    MIE_CORS_ORIGINS=https://your-frontend-domain.vercel.app
    NVIDIA_API_KEY=...
    NIM_BASE_URL=https://integrate.api.nvidia.com/v1
+   NIM_CHAT_MAX_TOKENS=1200
+   NIM_TIMEOUT_SEC=30.0
    ```
 
    `NVIDIA_API_KEY` is optional. Without it, the API uses deterministic demo responses.
+   Keep this key only in your host's secret/environment-variable UI; never commit it to `.env`, docs, or screenshots. If a key was pasted into chat or shared outside the secret manager, rotate it before going live.
 
 5. Check the deployed backend:
 
@@ -61,6 +64,7 @@ This repo is best hosted as two services:
    VITE_MIE_API_BASE_URL=https://your-backend.onrender.com
    VITE_MIE_BRAND_NAME=Aura Intelligence
    VITE_MIE_REASONING_MODE=auto
+   VITE_MIE_REASONING_MODEL=nano
    ```
 
 5. Redeploy the frontend after the backend URL is known.
@@ -84,6 +88,22 @@ Check the launch surface first:
 ```bash
 curl http://127.0.0.1:8000/launch/readiness
 ```
+
+## Miranda Live Readiness
+
+Before sharing a live URL, verify the real reasoning path with a non-canonical prompt. Canonical demo questions may intentionally return `curated_demo_response`.
+
+```bash
+curl https://your-backend.onrender.com/miranda/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"messages":[{"role":"user","content":"Give me a concise greenlight read on a mid-budget sports documentary for Gen Z audiences."}],"reasoning_mode":"auto","reasoning_model":"nano"}'
+```
+
+Expected:
+
+- `result.mode` is `nim_reasoning`.
+- `result.model` is `nvidia/nvidia-nemotron-nano-9b-v2`, unless you override `NEMOTRON_NANO_MODEL`.
+- The reply includes Recommendation, Top bets, Evidence, Risk, and Next action without being truncated.
 
 ## Brev Editable Workspace
 
